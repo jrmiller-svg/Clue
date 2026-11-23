@@ -8,7 +8,9 @@ A Clue / Cluedo solver built for your phone. You log turns as the game happens, 
 - **which card to show** when you have to refute (prefers a card that player has already seen)
 - **mis-taps**: if an entry contradicts earlier ones, it names that entry so you can fix it
 
-It's one self-contained HTML file (`index.html`). There's no server and no install, and it keeps working offline once loaded. Your game autosaves on the device.
+**Want to play fair?** `notepad.html` is a separate plain notepad: the paper detective sheet on your phone. It does no math, shows no odds, and gives no advice; every mark is one you make yourself. It has ×, ✓, ? and numbered-tag pens, undo, cross-off/circle on card names, a turn log that never marks the sheet for you, scratch notes, and a Hide button that covers the screen when the phone is on the table.
+
+Each app is one self-contained HTML file (`index.html` is the solver). There's no server and no install, and it keeps working offline once loaded. Your game autosaves on the device.
 
 ## Using it during a game
 
@@ -46,15 +48,16 @@ This app counts exactly instead:
 ## Verification
 
 - `npm test` runs the engine tests. The main check compares the exact solver with an independent **brute-force enumeration of every possible deal** on 275 random small games (2–6 players, face-up cards, accusations, noted cards). Deal counts, every probability, every certainty mark, and every triple probability must match. Other tests check that samples follow the exact posterior, that the MCMC fallback agrees with exact answers, that contradictions are pinned to the right entry, and that real deck sizes stay fast and keep the true deal possible.
-- `npm run test:ui` builds the page and drives it in headless Chromium at iPhone size, in light and dark mode: setup, logging, all tabs, conflict detection and undo, reload persistence, and the demo game.
+- `npm run test:ui` builds both pages and drives them in headless Chromium at iPhone size, in light and dark mode: setup, logging, all tabs, conflict detection and undo, reload persistence, and the demo game. For the notepad it checks that no percentages appear and that the turn log never marks the sheet.
 
 ## Development
 
 ```
 src/engine.js      solver (works in browser, Web Worker, and Node)
-src/app.html       phone UI (vanilla JS, no dependencies)
-tools/build.js     inlines the engine → index.html (+ dist/artifact.html)
-test/              engine tests (node:test) and UI smoke test (Playwright)
+src/app.html       solver UI (vanilla JS, no dependencies)
+src/notepad.html   plain notepad (no solver code at all)
+tools/build.js     inlines the engine → index.html; copies the notepad → notepad.html (+ dist/ artifact versions)
+test/              engine tests (node:test) and UI smoke tests for both apps (Playwright)
 ```
 
 Run `npm run build` after editing anything in `src/`.

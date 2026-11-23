@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px)}</style>
+<title>Clue Notepad</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#17624f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="A digital Clue / Cluedo detective notepad: mark the sheet yourself, keep a turn log, hide it from the table.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Special+Elite&display=swap">
+<style>
+/* Layout: the paper detective sheet — sticky header, the grid, a pen tray and tab bar at the thumb. */
+:root {
+  --paper: #eef1ef;
+  --card: #ffffff;
+  --ink: #1b2230;
+  --muted: #5a6670;
+  --line: #d3dad6;
+  --felt: #17624f;
+  --felt-soft: #dcebe5;
+  --stamp: #b42318;
+  --stamp-soft: #f8e1de;
+  --brass: #9a6410;
+  --brass-soft: #f6ead2;
+  --chip: #f7f8f6;
+  --on-felt: #ffffff;
+  --shadow: 0 1px 2px rgba(20, 30, 40, .08), 0 4px 16px rgba(20, 30, 40, .06);
+  --font-display: "Special Elite", "Courier New", ui-monospace, monospace;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --tabbar-h: 62px;
+  --tray-h: 64px;
+  --r: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1412; --card: #161f1c; --ink: #e5ece9; --muted: #95a49e; --line: #2a3733;
+    --felt: #43b48f; --felt-soft: #173a30; --stamp: #ff6d5c; --stamp-soft: #3d1c19;
+    --brass: #e3a940; --brass-soft: #3a2c12; --chip: #1c2622; --on-felt: #0e1412;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1412; --card: #161f1c; --ink: #e5ece9; --muted: #95a49e; --line: #2a3733;
+  --felt: #43b48f; --felt-soft: #173a30; --stamp: #ff6d5c; --stamp-soft: #3d1c19;
+  --brass: #e3a940; --brass-soft: #3a2c12; --chip: #1c2622; --on-felt: #0e1412;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 var(--font-body); -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--card); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; touch-action: manipulation; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--felt) 55%, transparent); outline-offset: 2px; }
+
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--card); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 680px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.brand { font-family: var(--font-display); font-size: 20px; letter-spacing: .02em; white-space: nowrap; }
+.brand small { font-family: var(--font-body); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: block; margin-top: -2px; }
+.grow { flex: 1; min-width: 0; }
+.icon-btn { border: 1px solid var(--line); background: var(--chip); border-radius: 10px; min-width: 40px; height: 40px; padding: 0 10px; display: inline-grid; place-items: center; font-size: 15px; font-weight: 600; line-height: 1; }
+.icon-btn.big { font-size: 20px; }
+
+main { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px;
+  padding-block: 14px calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main.with-tray { padding-bottom: calc(var(--tabbar-h) + var(--tray-h) + 28px + env(safe-area-inset-bottom, 0px)); }
+main.no-tabs { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+.sheet { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sheet h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.between { justify-content: space-between; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.tiny { font-size: 12px; }
+.stack { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.field-label { font-size: 13px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--chip); border-radius: 10px; padding: 8px 11px; min-height: 40px; font-size: 14px; line-height: 1.15; display: inline-flex; align-items: center; gap: 6px; }
+.chip[aria-pressed="true"] { background: var(--felt); color: var(--on-felt); border-color: var(--felt); }
+.chip .tag { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 5px; border-radius: 5px; background: var(--felt-soft); color: var(--felt); }
+.chip[aria-pressed="true"] .tag { background: rgba(255,255,255,.22); color: inherit; }
+.chip:disabled { opacity: .4; cursor: not-allowed; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; border-radius: 9px; padding: 9px 6px; font-weight: 600; font-size: 14px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+.btn { border: 1px solid var(--line); background: var(--chip); border-radius: 12px; padding: 11px 16px; font-weight: 600; min-height: 46px; }
+.btn.primary { background: var(--felt); border-color: var(--felt); color: var(--on-felt); }
+.btn.primary:disabled { background: var(--line); border-color: var(--line); color: var(--muted); cursor: not-allowed; }
+.btn.danger { color: var(--stamp); }
+.btn.block { width: 100%; }
+.linkish { background: none; border: 0; color: var(--felt); font-weight: 600; padding: 4px 2px; font-size: 13px; }
+input[type="text"], select, textarea { border: 1px solid var(--line); background: var(--chip); border-radius: 10px; padding: 9px 11px; min-height: 42px; width: 100%; min-width: 0; }
+textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+textarea.mono { font-family: var(--font-data); font-size: 13px; }
+.prow { display: flex; gap: 6px; align-items: center; }
+.prow input[type="text"] { flex: 1 1 0; width: auto; }
+.prow > * { flex: none; }
+
+/* the sheet grid */
+.grid-wrap { overflow-x: auto; margin: 0 -14px; padding: 0 14px; }
+table.grid { border-collapse: separate; border-spacing: 0; width: 100%; }
+.grid th, .grid td { padding: 0; text-align: center; border-bottom: 1px solid var(--line); }
+.grid thead th { font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 2px; white-space: nowrap; max-width: 60px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.grid thead th .cnt { display: block; font-family: var(--font-data); font-weight: 500; font-size: 10px; color: var(--felt); }
+.grid thead th.me { color: var(--felt); }
+.grid th.card { text-align: left; position: sticky; left: 0; background: var(--card); z-index: 1; padding: 0 6px 0 0; max-width: 140px; }
+.grid th.card button { all: unset; box-sizing: border-box; display: block; padding: 10px 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; font-size: 14px; }
+.grid th.card button.out { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
+.grid th.card button.hot span { border: 2px solid var(--stamp); border-radius: 999px; padding: 1px 7px; color: var(--stamp); font-weight: 600; }
+.grid tr.cat th { text-align: left; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 0 4px; position: sticky; left: 0; background: var(--card); }
+.grid td { min-width: 42px; height: 42px; }
+.grid td button { all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center; position: relative; width: calc(100% - 4px); height: 36px; margin: 2px; border-radius: 7px; background: var(--chip); font-size: 17px; font-weight: 700; }
+.grid td button.m-x { color: var(--muted); background: transparent; font-weight: 500; font-size: 19px; }
+.grid td button.m-y { background: var(--felt); color: var(--on-felt); }
+.grid td button.m-q { background: var(--brass-soft); color: var(--brass); }
+.grid td button .tags { position: absolute; top: 2px; right: 4px; font-family: var(--font-data); font-size: 11px; font-weight: 600; color: var(--stamp); line-height: 1; letter-spacing: -.02em; }
+.grid td button.m-y .tags { color: var(--on-felt); }
+.grid td button:focus-visible { outline-offset: 0; }
+.legend { display: flex; gap: 10px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+.legend i { font-style: normal; display: inline-grid; place-items: center; width: 22px; height: 20px; border-radius: 5px; margin-right: 3px; font-weight: 700; vertical-align: middle; }
+
+/* pen tray */
+.tray { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px)); z-index: 19; background: var(--card); border-top: 1px solid var(--line);
+  padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); }
+.tray-in { max-width: 680px; margin: 0 auto; height: var(--tray-h); display: flex; align-items: center; gap: 6px; }
+.pen { border: 1px solid var(--line); background: var(--chip); border-radius: 10px; height: 46px; min-width: 46px; padding: 0 8px; font-size: 19px; font-weight: 700; display: grid; place-items: center; flex: 1 1 0; }
+.pen[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); background: var(--card); }
+.pen.y { color: var(--felt); } .pen.q { color: var(--brass); } .pen.t { color: var(--stamp); font-family: var(--font-data); font-size: 16px; } .pen.x { color: var(--muted); }
+.pen.e, .pen.u { font-size: 14px; font-weight: 600; }
+.numstrip { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-h) + var(--tray-h) + env(safe-area-inset-bottom, 0px)); z-index: 19; background: var(--card); border-top: 1px solid var(--line); padding: 8px max(10px, env(safe-area-inset-right, 0px)) 8px max(10px, env(safe-area-inset-left, 0px)); }
+.numstrip .chips { max-width: 680px; margin: 0 auto; }
+.numstrip .chip { min-width: 40px; justify-content: center; font-family: var(--font-data); }
+
+/* turn log */
+.turns { display: flex; flex-direction: column; gap: 8px; }
+.turn { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card); display: flex; gap: 10px; }
+.turn .n { font-family: var(--font-data); color: var(--muted); font-size: 12px; min-width: 26px; padding-top: 2px; }
+.turn .body { flex: 1; min-width: 0; }
+
+/* tabs */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+.tabs-in { max-width: 680px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); height: var(--tabbar-h); }
+.tabs button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.tabs button svg { width: 22px; height: 22px; }
+.tabs button[aria-current="page"] { color: var(--felt); }
+
+/* privacy cover */
+.cover { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; text-align: center; color: var(--ink);
+  background: repeating-linear-gradient(45deg, var(--paper) 0 14px, var(--chip) 14px 28px); }
+.cover button { all: unset; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px; }
+.cover .seal { font-family: var(--font-display); font-size: 26px; color: var(--stamp); border: 3px solid var(--stamp); border-radius: 8px; padding: 6px 14px 2px; transform: rotate(-4deg); background: var(--card); }
+
+.scrim { position: fixed; inset: 0; background: rgba(10, 14, 12, .45); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+.modal { background: var(--card); width: 100%; max-width: 680px; max-height: 88vh; overflow: auto; border-radius: 16px 16px 0 0; display: flex; flex-direction: column; gap: 12px;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.modal .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); align-self: center; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tabbar-h) + var(--tray-h) + 14px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--paper); padding: 9px 14px; border-radius: 10px; font-size: 14px; z-index: 50; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var EDITIONS = {
+    classic: { label: 'Clue — classic (Mrs. White)', cats: [
+      ['Suspect', ['Miss Scarlet', 'Colonel Mustard', 'Mrs. White', 'Mr. Green', 'Mrs. Peacock', 'Professor Plum']],
+      ['Weapon', ['Candlestick', 'Knife', 'Lead Pipe', 'Revolver', 'Rope', 'Wrench']],
+      ['Room', ['Hall', 'Lounge', 'Dining Room', 'Kitchen', 'Ballroom', 'Conservatory', 'Billiard Room', 'Library', 'Study']]] },
+    modern: { label: 'Clue — 2016+ (Dr. Orchid)', cats: [
+      ['Suspect', ['Miss Scarlet', 'Colonel Mustard', 'Dr. Orchid', 'Mr. Green', 'Mrs. Peacock', 'Professor Plum']],
+      ['Weapon', ['Candlestick', 'Dagger', 'Lead Pipe', 'Revolver', 'Rope', 'Wrench']],
+      ['Room', ['Hall', 'Lounge', 'Dining Room', 'Kitchen', 'Ballroom', 'Conservatory', 'Billiard Room', 'Library', 'Study']]] },
+    cluedo: { label: 'Cluedo — UK', cats: [
+      ['Suspect', ['Miss Scarlett', 'Colonel Mustard', 'Mrs White', 'Reverend Green', 'Mrs Peacock', 'Professor Plum']],
+      ['Weapon', ['Candlestick', 'Dagger', 'Lead Piping', 'Revolver', 'Rope', 'Spanner']],
+      ['Room', ['Hall', 'Lounge', 'Dining Room', 'Kitchen', 'Ballroom', 'Conservatory', 'Billiard Room', 'Library', 'Study']]] },
+    master: { label: 'Clue — Master Detective', cats: [
+      ['Suspect', ['Miss Scarlet', 'Colonel Mustard', 'Mrs. White', 'Mr. Green', 'Mrs. Peacock', 'Professor Plum', 'Madame Rose', 'Sergeant Gray', 'Monsieur Brunette', 'Miss Peach']],
+      ['Weapon', ['Candlestick', 'Knife', 'Lead Pipe', 'Revolver', 'Rope', 'Wrench', 'Horseshoe', 'Poison']],
+      ['Room', ['Carriage House', 'Conservatory', 'Kitchen', 'Trophy Room', 'Dining Room', 'Drawing Room', 'Gazebo', 'Courtyard', 'Fountain', 'Library', 'Billiard Room', 'Studio']]] }
+  };
+  var MARKS = { x: '×', y: '✓', q: '?' };
+
+  // ------------------------------------------------------------ state
+  var KEY = 'clue-notepad/v1';
+  var S = { game: null, game0: null, setup: null, tab: 'sheet', pen: 'x', tagNum: 1, numOpen: false, hidden: false, undo: [], form: null, modal: null, toast: null, confirmDel: null };
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify({ game: S.game, game0: S.game ? null : S.game0, setup: S.game ? null : S.setup, tab: S.tab, pen: S.pen, tagNum: S.tagNum })); } catch (e) { /* storage unavailable */ }
+  }
+  function restore() {
+    try {
+      var d = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!d) return;
+      if (d.game && d.game.categories) S.game = d.game;
+      if (d.game0 && d.game0.categories) S.game0 = d.game0;
+      if (d.setup) S.setup = d.setup;
+      if (d.tab) S.tab = d.tab;
+      if (d.pen) S.pen = d.pen;
+      if (d.tagNum) S.tagNum = d.tagNum;
+    } catch (e) { /* ignore */ }
+  }
+
+  // ------------------------------------------------------------ helpers
+  function h(tag, props) {
+    var el = document.createElement(tag);
+    if (props) for (var k in props) {
+      var v = props[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+      else if (k === 'style') el.style.cssText = v;
+      else if (v === true) el.setAttribute(k, '');
+      else el.setAttribute(k, v);
+    }
+    for (var i = 2; i < arguments.length; i++) addOne(el, arguments[i]);
+    return el;
+  }
+  function add(el) { for (var i = 1; i < arguments.length; i++) addOne(el, arguments[i]); }
+  function addOne(el, c) {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { addOne(el, x); }); return; }
+    el.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  }
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+  function deck(g) {
+    var names = [], byCat = [];
+    g.categories.forEach(function (c) { var a = []; c.cards.forEach(function (n) { a.push(names.length); names.push(n); }); byCat.push(a); });
+    return { names: names, byCat: byCat };
+  }
+  function shortName(i) { return i === S.game.me ? 'You' : S.game.players[i].name; }
+  function toast(msg) {
+    S.toast = msg; renderToast();
+    clearTimeout(toast.t);
+    toast.t = setTimeout(function () { S.toast = null; renderToast(); }, 2000);
+  }
+
+  // ------------------------------------------------------------ render
+  var app = document.getElementById('app');
+  function render() {
+    persist();
+    app.innerHTML = '';
+    app.appendChild(viewHeader());
+    if (!S.game) { app.appendChild(viewSetup()); renderModal(); renderToast(); return; }
+    var main = h('main', { class: S.tab === 'sheet' ? 'with-tray' : '' });
+    if (S.tab === 'sheet') add(main, viewSheet());
+    else if (S.tab === 'turns') add(main, viewTurns());
+    else add(main, viewScratch());
+    app.appendChild(main);
+    if (S.tab === 'sheet') { app.appendChild(viewTray()); if (S.numOpen) app.appendChild(viewNumStrip()); }
+    app.appendChild(viewTabs());
+    if (S.hidden) app.appendChild(viewCover());
+    renderModal(); renderToast();
+  }
+
+  function viewHeader() {
+    return h('header', { class: 'top' }, h('div', { class: 'top-in' },
+      h('div', { class: 'brand' }, 'Notepad', h('small', null, 'Clue detective notes')),
+      h('div', { class: 'grow' }),
+      S.game ? h('button', { class: 'icon-btn', onclick: function () { S.hidden = true; render(); } }, 'Hide') : null,
+      S.game ? h('button', { class: 'icon-btn big', 'aria-label': 'Menu', onclick: function () { S.modal = { kind: 'menu' }; renderModal(); } }, '⋯') : null));
+  }
+
+  var ICONS = {
+    sheet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>',
+    turns: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    scratch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'
+  };
+  function viewTabs() {
+    var tabs = [['sheet', 'Sheet'], ['turns', 'Turns'], ['scratch', 'Scratch']];
+    return h('nav', { class: 'tabs', 'aria-label': 'Sections' }, h('div', { class: 'tabs-in' }, tabs.map(function (t) {
+      var b = h('button', { 'aria-current': S.tab === t[0] ? 'page' : null, onclick: function () { S.tab = t[0]; S.numOpen = false; S.confirmDel = null; render(); window.scrollTo(0, 0); } });
+      b.innerHTML = ICONS[t[0]];
+      add(b, t[1]);
+      return b;
+    })));
+  }
+
+  function viewCover() {
+    return h('div', { class: 'cover' }, h('button', { 'aria-label': 'Show notes', onclick: function () { S.hidden = false; render(); } },
+      h('span', { class: 'seal' }, 'Confidential'),
+      h('span', { class: 'small muted' }, 'Notes hidden. Tap to show.')));
+  }
+
+  // ------------------------------------------------------------- setup
+  function newSetup(edition) {
+    var ed = EDITIONS[edition || 'classic'];
+    return {
+      edition: edition || 'classic',
+      cats: ed.cats.map(function (c) { return { name: c[0], cards: c[1].slice() }; }),
+      players: [{ name: 'Me' }, { name: 'Player 2' }, { name: 'Player 3' }, { name: 'Player 4' }],
+      me: 0, myCards: []
+    };
+  }
+  function viewSetup() {
+    if (!S.setup) S.setup = newSetup('classic');
+    var s = S.setup, P = s.players.length;
+    var main = h('main', { class: 'no-tabs' });
+    function rerender() { render(); }
+    add(main, h('section', { class: 'sheet' }, h('h2', null, 'New game'),
+      h('p', { class: 'small', style: 'margin:0' }, 'A digital version of the paper detective sheet. You make every mark yourself. It does no math and gives no hints.')));
+
+    var sel = h('select', { id: 'edition', 'aria-label': 'Edition', onchange: function (e) {
+      var v = e.target.value;
+      if (v === 'custom') { s.edition = 'custom'; return; }
+      var keep = s.players, me = s.me;
+      S.setup = newSetup(v); S.setup.players = keep; S.setup.me = me;
+      rerender();
+    } });
+    Object.keys(EDITIONS).forEach(function (k) { add(sel, h('option', { value: k, selected: s.edition === k }, EDITIONS[k].label)); });
+    add(sel, h('option', { value: 'custom', selected: s.edition === 'custom' }, 'Custom / edited cards'));
+    var det = h('details', null, h('summary', null, 'Edit card names'),
+      h('div', { class: 'stack', style: 'margin-top:10px' }, s.cats.map(function (c, ci) {
+        return h('label', { class: 'stack' }, h('span', { class: 'field-label' }, c.name + 's — one per line'),
+          h('textarea', { id: 'cat-' + ci, class: 'mono', rows: Math.min(12, c.cards.length + 1) }, c.cards.join('\n')));
+      }), h('button', { class: 'btn', onclick: function () {
+        s.cats.forEach(function (c, ci) {
+          var next = document.getElementById('cat-' + ci).value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+          if (next.length && next.join('\n') !== c.cards.join('\n')) { c.cards = next; s.edition = 'custom'; s.myCards = []; }
+        });
+        toast('Card names updated'); rerender();
+      } }, 'Apply card names')));
+    add(main, h('section', { class: 'sheet' }, h('h2', null, 'Edition'), sel, det));
+
+    var plist = h('div', { class: 'stack' });
+    s.players.forEach(function (p, i) {
+      add(plist, h('div', { class: 'prow' },
+        h('div', { class: 'stack', style: 'gap:2px' },
+          h('button', { class: 'linkish', 'aria-label': 'Move up', disabled: i === 0, style: 'padding:0 4px', onclick: function () { move(i, -1); } }, '▲'),
+          h('button', { class: 'linkish', 'aria-label': 'Move down', disabled: i === P - 1, style: 'padding:0 4px', onclick: function () { move(i, 1); } }, '▼')),
+        h('input', { type: 'text', id: 'pname-' + i, value: p.name, autocomplete: 'off', 'aria-label': 'Player ' + (i + 1) + ' name', oninput: function (e) { p.name = e.target.value; persist(); refreshStart(); } }),
+        h('button', { class: 'chip', 'aria-pressed': s.me === i ? 'true' : 'false', onclick: function () { s.me = i; rerender(); } }, 'Me'),
+        h('button', { class: 'linkish', 'aria-label': 'Remove player', disabled: P <= 2, style: 'color:var(--stamp);font-size:16px', onclick: function () {
+          s.players.splice(i, 1);
+          if (s.me === i) s.me = 0; else if (s.me > i) s.me--;
+          rerender();
+        } }, '✕')));
+    });
+    function move(i, dlt) {
+      var j = i + dlt, t = s.players[i]; s.players[i] = s.players[j]; s.players[j] = t;
+      if (s.me === i) s.me = j; else if (s.me === j) s.me = i;
+      rerender();
+    }
+    add(main, h('section', { class: 'sheet' }, h('h2', null, 'Players in turn order'),
+      h('p', { class: 'small muted', style: 'margin:0' }, 'Clockwise, as you sit. Each player gets a column on the sheet.'),
+      plist,
+      h('div', { class: 'row' }, h('button', { class: 'btn', disabled: P >= 10, onclick: function () { s.players.push({ name: 'Player ' + (P + 1) }); rerender(); } }, '+ Add player'))));
+
+    var d = { names: [], byCat: [] }, idx = 0;
+    s.cats.forEach(function (c) { var a = []; c.cards.forEach(function (n) { a.push(idx++); d.names.push(n); }); d.byCat.push(a); });
+    add(main, h('section', { class: 'sheet' },
+      h('div', { class: 'row between' }, h('h2', null, 'Your cards'), h('span', { class: 'small muted' }, 'optional')),
+      h('p', { class: 'small muted', style: 'margin:0' }, 'They get a ✓ in your column and are crossed off, as you would on paper.'),
+      s.cats.map(function (c, ci) {
+        return h('div', { class: 'stack', style: 'gap:6px' }, h('span', { class: 'field-label' }, c.name + 's'),
+          h('div', { class: 'chips' }, d.byCat[ci].map(function (cid) {
+            var on = s.myCards.indexOf(cid) >= 0;
+            return h('button', { class: 'chip', 'aria-pressed': on ? 'true' : 'false', onclick: function () {
+              var k = s.myCards.indexOf(cid);
+              if (k >= 0) s.myCards.splice(k, 1); else s.myCards.push(cid);
+              rerender();
+            } }, d.names[cid]);
+          })));
+      })));
+    add(main, h('div', { class: 'stack' },
+      h('div', { id: 'setup-hint', class: 'small muted', style: 'text-align:center' }, setupProblem(s) || ''),
+      h('button', { id: 'start-btn', class: 'btn primary block', disabled: !!setupProblem(s), onclick: startGame }, S.game0 ? 'Save setup' : 'Start game'),
+      S.game0 ? h('button', { class: 'btn block', onclick: function () { S.game = S.game0; S.game0 = null; S.setup = null; render(); } }, 'Cancel') : null));
+    return main;
+  }
+  function setupProblem(s) {
+    if (s.players.length < 2) return 'Add at least two players.';
+    if (s.players.some(function (p) { return !p.name.trim(); })) return 'Give every player a name.';
+    if (s.cats.some(function (c) { return !c.cards.length; })) return 'Each category needs at least one card.';
+    return null;
+  }
+  function refreshStart() {
+    var pr = setupProblem(S.setup), b = document.getElementById('start-btn'), hn = document.getElementById('setup-hint');
+    if (b) b.disabled = !!pr;
+    if (hn) hn.textContent = pr || '';
+  }
+  function startGame() {
+    var s = S.setup;
+    if (setupProblem(s)) return;
+    var old = S.game0;
+    var sameDeck = old && JSON.stringify(old.categories) === JSON.stringify(s.cats);
+    var samePlayers = old && old.players.length === s.players.length;
+    var g = {
+      categories: s.cats.map(function (c) { return { name: c.name, cards: c.cards.slice() }; }),
+      players: s.players.map(function (p) { return { name: p.name.trim() }; }),
+      me: s.me, myCards: s.myCards.slice(),
+      marks: sameDeck && samePlayers ? old.marks : {}, tags: sameDeck && samePlayers ? old.tags : {},
+      rows: sameDeck ? old.rows : {}, turns: sameDeck && samePlayers ? old.turns : [], scratch: old ? old.scratch : '',
+      setup: JSON.parse(JSON.stringify(s))
+    };
+    // the paper ritual: tick your own cards and cross them off
+    g.myCards.forEach(function (c) { g.marks[g.me + ':' + c] = 'y'; g.rows[c] = 'out'; });
+    S.game = g; S.game0 = null; S.setup = null; S.tab = 'sheet'; S.undo = []; S.form = null;
+    render();
+  }
+
+  // ------------------------------------------------------------- sheet
+  function viewSheet() {
+    var g = S.game, d = deck(g), P = g.players.length;
+    var table = h('table', { class: 'grid' });
+    table.appendChild(h('thead', null, h('tr', null, h('th', { class: 'card', scope: 'col' }, ''),
+      g.players.map(function (p, i) {
+        return h('th', { scope: 'col', class: i === g.me ? 'me' : '', title: p.name }, (i === g.me ? 'You' : p.name).slice(0, 6), h('span', { class: 'cnt', id: 'cnt-' + i }, countYes(i) || ''));
+      }))));
+    var tb = h('tbody');
+    g.categories.forEach(function (cat, ci) {
+      add(tb, h('tr', { class: 'cat' }, h('th', { colspan: P + 1 }, cat.name + 's')));
+      d.byCat[ci].forEach(function (c) {
+        var st = g.rows[c] || '';
+        var tr = h('tr');
+        add(tr, h('th', { class: 'card', scope: 'row' }, h('button', { class: st, id: 'row-' + c, 'aria-label': d.names[c] + (st === 'out' ? ', crossed off' : st === 'hot' ? ', circled' : ''), onclick: function () { cycleRow(c); } }, h('span', null, d.names[c]))));
+        for (var p = 0; p < P; p++) add(tr, h('td', null, cellButton(p, c, d)));
+        add(tb, tr);
+      });
+    });
+    table.appendChild(tb);
+    var penHelp = { x: '× — doesn’t have it', y: '✓ — has it', q: '? — maybe', t: '#' + S.tagNum + ' — tag (link cards from one turn)', e: 'eraser' }[S.pen];
+    return [h('section', { class: 'sheet' },
+      h('div', { class: 'row between' }, h('h2', null, 'Detective sheet'), h('span', { class: 'tiny muted' }, 'Pen: ' + penHelp)),
+      h('div', { class: 'grid-wrap' }, table),
+      h('div', { class: 'legend' },
+        h('span', null, 'Tap a box to mark it; tap again to clear.'),
+        h('span', null, 'Tap a card name to cross it off, again to circle it.')))];
+  }
+  function countYes(p) {
+    var n = 0, m = S.game.marks;
+    for (var k in m) if (m[k] === 'y' && k.split(':')[0] === String(p)) n++;
+    return n ? n + '✓' : '';
+  }
+  function cellButton(p, c, d) {
+    var key = p + ':' + c, m = S.game.marks[key], tg = S.game.tags[key] || [];
+    var label = d.names[c] + ', ' + S.game.players[p].name + ': ' + (m === 'y' ? 'has it' : m === 'x' ? 'does not have it' : m === 'q' ? 'maybe' : 'blank') + (tg.length ? ', tags ' + tg.join(' ') : '');
+    var b = h('button', { class: m ? 'm-' + m : '', 'data-key': key, 'aria-label': label, onclick: function () { tapCell(p, c); } }, m ? MARKS[m] : '');
+    if (tg.length) b.appendChild(h('span', { class: 'tags' }, tg.join(' ')));
+    return b;
+  }
+  function refreshCell(p, c) {
+    var old = app.querySelector('[data-key="' + p + ':' + c + '"]');
+    if (old) old.replaceWith(cellButton(p, c, deck(S.game)));
+    var cnt = document.getElementById('cnt-' + p);
+    if (cnt) cnt.textContent = countYes(p);
+    persist();
+  }
+  function tapCell(p, c) {
+    var g = S.game, key = p + ':' + c;
+    var prev = { key: key, mark: g.marks[key] || null, tags: (g.tags[key] || []).slice() };
+    if (S.pen === 'e') { delete g.marks[key]; delete g.tags[key]; }
+    else if (S.pen === 't') {
+      var t = (g.tags[key] || []).slice(), i = t.indexOf(S.tagNum);
+      if (i >= 0) t.splice(i, 1); else { t.push(S.tagNum); t.sort(function (a, b) { return a - b; }); }
+      if (t.length) g.tags[key] = t; else delete g.tags[key];
+    } else {
+      if (g.marks[key] === S.pen) delete g.marks[key]; else g.marks[key] = S.pen;
+    }
+    if (prev.mark === (g.marks[key] || null) && prev.tags.join() === (g.tags[key] || []).join()) return;
+    S.undo.push({ kind: 'cell', p: p, c: c, prev: prev });
+    if (S.undo.length > 200) S.undo.shift();
+    refreshCell(p, c);
+    refreshUndo();
+  }
+  function cycleRow(c) {
+    var g = S.game, cur = g.rows[c] || '';
+    var next = cur === '' ? 'out' : cur === 'out' ? 'hot' : '';
+    S.undo.push({ kind: 'row', c: c, prev: cur });
+    if (next) g.rows[c] = next; else delete g.rows[c];
+    var b = document.getElementById('row-' + c);
+    if (b) { b.className = next; b.setAttribute('aria-label', deck(g).names[c] + (next === 'out' ? ', crossed off' : next === 'hot' ? ', circled' : '')); }
+    persist(); refreshUndo();
+  }
+  function undo() {
+    var u = S.undo.pop();
+    if (!u) return;
+    var g = S.game;
+    if (u.kind === 'cell') {
+      if (u.prev.mark) g.marks[u.prev.key] = u.prev.mark; else delete g.marks[u.prev.key];
+      if (u.prev.tags.length) g.tags[u.prev.key] = u.prev.tags; else delete g.tags[u.prev.key];
+      refreshCell(u.p, u.c);
+    } else {
+      if (u.prev) g.rows[u.c] = u.prev; else delete g.rows[u.c];
+      var b = document.getElementById('row-' + u.c);
+      if (b) b.className = u.prev;
+      persist();
+    }
+    refreshUndo();
+  }
+  function refreshUndo() { var b = document.getElementById('undo-btn'); if (b) b.disabled = !S.undo.length; }
+
+  function viewTray() {
+    function pen(k, label, cls, aria) {
+      return h('button', { class: 'pen ' + cls, 'aria-pressed': S.pen === k ? 'true' : 'false', 'aria-label': aria, onclick: function () {
+        if (k === 't' && S.pen === 't') { S.numOpen = !S.numOpen; render(); return; }
+        S.pen = k; S.numOpen = k === 't' && S.numOpen; render();
+      } }, label);
+    }
+    return h('div', { class: 'tray', role: 'toolbar', 'aria-label': 'Pens' }, h('div', { class: 'tray-in' },
+      pen('x', '×', 'x', 'Cross: does not have it'),
+      pen('y', '✓', 'y', 'Tick: has it'),
+      pen('q', '?', 'q', 'Question mark: maybe'),
+      pen('t', '#' + S.tagNum, 't', 'Number tag ' + S.tagNum + '. Tap again to change the number'),
+      pen('e', 'Erase', 'e', 'Eraser'),
+      h('button', { class: 'pen u', id: 'undo-btn', disabled: !S.undo.length, 'aria-label': 'Undo last mark', onclick: undo }, 'Undo')));
+  }
+  function viewNumStrip() {
+    var nums = [];
+    for (var i = 1; i <= 20; i++) nums.push(i);
+    return h('div', { class: 'numstrip' }, h('div', { class: 'chips' }, nums.map(function (n) {
+      return h('button', { class: 'chip', 'aria-pressed': S.tagNum === n ? 'true' : 'false', onclick: function () { S.tagNum = n; S.pen = 't'; S.numOpen = false; render(); } }, '#' + n);
+    })));
+  }
+
+  // ------------------------------------------------------------- turns
+  function blankForm() {
+    var g = S.game, P = g.players.length, last = g.turns.length ? g.turns[g.turns.length - 1].suggester : -1;
+    return { suggester: (last + 1 + P) % P, cards: g.categories.map(function () { return -1; }), refuter: null, shown: -1 };
+  }
+  function viewTurns() {
+    var g = S.game, d = deck(g), P = g.players.length;
+    if (!S.form) S.form = blankForm();
+    var f = S.form;
+    var form = h('section', { class: 'sheet' },
+      h('div', { class: 'row between' }, h('h2', null, 'Turn ' + (g.turns.length + 1)), h('span', { class: 'tiny muted' }, 'A record only — nothing is marked for you')));
+    add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Who suggested?'),
+      h('div', { class: 'chips' }, g.players.map(function (_, i) {
+        return h('button', { class: 'chip', 'aria-pressed': f.suggester === i ? 'true' : 'false', onclick: function () { f.suggester = i; f.refuter = null; f.shown = -1; render(); } }, shortName(i));
+      }))));
+    g.categories.forEach(function (cat, ci) {
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, cat.name),
+        h('div', { class: 'chips' }, d.byCat[ci].map(function (c) {
+          return h('button', { class: 'chip', 'aria-pressed': f.cards[ci] === c ? 'true' : 'false', onclick: function () { f.cards[ci] = f.cards[ci] === c ? -1 : c; f.shown = -1; render(); } }, d.names[c]);
+        }))));
+    });
+    var order = [];
+    for (var i = 1; i < P; i++) order.push((f.suggester + i) % P);
+    add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Who showed a card?'),
+      h('div', { class: 'chips' }, order.map(function (q) {
+        return h('button', { class: 'chip', 'aria-pressed': f.refuter === q ? 'true' : 'false', onclick: function () { f.refuter = f.refuter === q ? null : q; f.shown = -1; render(); } }, shortName(q));
+      }), h('button', { class: 'chip', 'aria-pressed': f.refuter === -1 ? 'true' : 'false', onclick: function () { f.refuter = f.refuter === -1 ? null : -1; f.shown = -1; render(); } }, 'No one'))));
+    var cardsSet = f.cards.every(function (c) { return c >= 0; });
+    if ((f.suggester === g.me || f.refuter === g.me) && f.refuter !== null && f.refuter >= 0 && cardsSet) {
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, f.suggester === g.me ? 'Card you were shown' : 'Card you showed', h('span', { class: 'tiny' }, 'optional')),
+        h('div', { class: 'chips' }, f.cards.map(function (c) {
+          return h('button', { class: 'chip', 'aria-pressed': f.shown === c ? 'true' : 'false', onclick: function () { f.shown = f.shown === c ? -1 : c; render(); } }, d.names[c]);
+        }))));
+    }
+    var valid = cardsSet && f.refuter !== null;
+    add(form, h('button', { class: 'btn primary block', disabled: !valid, onclick: function () {
+      g.turns.push({ id: uid(), suggester: f.suggester, cards: f.cards.slice(), refuter: f.refuter, shown: f.shown });
+      S.form = blankForm(); toast('Turn ' + g.turns.length + ' saved'); render(); window.scrollTo(0, 0);
+    } }, 'Save turn'));
+
+    var list = h('div', { class: 'turns' });
+    for (var t = g.turns.length - 1; t >= 0; t--) (function (t) {
+      var tn = g.turns[t], confirming = S.confirmDel === tn.id;
+      var ps = [];
+      if (tn.refuter !== null) for (var k = 1; k < P; k++) { var q = (tn.suggester + k) % P; if (q === tn.refuter) break; ps.push(q); }
+      var res = tn.refuter === -1 ? 'No one could show a card.'
+        : (tn.refuter === g.me ? 'You showed ' : shortName(tn.refuter) + ' showed ') + (tn.shown >= 0 ? d.names[tn.shown] : 'a card') + '.';
+      add(list, h('div', { class: 'turn' }, h('span', { class: 'n' }, '#' + (t + 1)),
+        h('div', { class: 'body' }, h('b', null, shortName(tn.suggester)), ' suggested ', tn.cards.map(function (c) { return d.names[c]; }).join(' · '),
+          h('div', { class: 'small muted' }, res, ps.length ? ' Passed: ' + ps.map(shortName).join(', ') + '.' : '')),
+        confirming
+          ? h('button', { class: 'linkish', style: 'color:var(--stamp)', onclick: function () { g.turns.splice(t, 1); S.confirmDel = null; render(); } }, 'Confirm')
+          : h('button', { class: 'linkish', style: 'color:var(--muted)', onclick: function () { S.confirmDel = tn.id; render(); } }, 'Delete')));
+    })(t);
+    return [form, h('section', { class: 'sheet' }, h('h2', null, 'Turn log'),
+      g.turns.length ? list : h('p', { class: 'small muted', style: 'margin:0' }, 'Saved turns show up here, newest first.'))];
+  }
+
+  // ----------------------------------------------------------- scratch
+  function viewScratch() {
+    var g = S.game;
+    var ta = h('textarea', { id: 'scratch', rows: 14, placeholder: 'Anything you want to remember: who keeps asking about the Kitchen, hunches, reminders…', oninput: function (e) { g.scratch = e.target.value; persist(); } }, g.scratch || '');
+    return h('section', { class: 'sheet' }, h('h2', null, 'Scratch notes'), ta, h('p', { class: 'tiny muted', style: 'margin:0' }, 'Saved as you type.'));
+  }
+
+  // ------------------------------------------------------------- modal
+  var modalRoot = document.createElement('div');
+  document.body.appendChild(modalRoot);
+  function closeModal() { S.modal = null; renderModal(); }
+  function renderModal() {
+    modalRoot.innerHTML = '';
+    if (!S.modal) return;
+    var m = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'grab' }));
+    var scrim = h('div', { class: 'scrim', onclick: function (e) { if (e.target === scrim) closeModal(); } }, m);
+    if (S.modal.kind === 'menu') {
+      add(m, h('h3', null, 'Menu'),
+        h('button', { class: 'btn block', onclick: function () { S.game0 = S.game; S.setup = JSON.parse(JSON.stringify(S.game.setup)); S.game = null; S.modal = null; render(); } }, 'Edit setup (players, your cards)'),
+        S.modal.confirmClear
+          ? h('button', { class: 'btn block danger', onclick: function () { var g = S.game; g.marks = {}; g.tags = {}; g.rows = {}; g.myCards.forEach(function (c) { g.marks[g.me + ':' + c] = 'y'; g.rows[c] = 'out'; }); S.undo = []; S.modal = null; render(); toast('Sheet cleared'); } }, 'Tap again to clear every mark')
+          : h('button', { class: 'btn block', onclick: function () { S.modal.confirmClear = true; renderModal(); } }, 'Clear the sheet'),
+        S.modal.confirmNew
+          ? h('button', { class: 'btn block danger', onclick: function () { var keep = S.game.setup; S.game = null; S.setup = keep ? JSON.parse(JSON.stringify(keep)) : null; if (S.setup) S.setup.myCards = []; S.modal = null; S.undo = []; S.form = null; render(); } }, 'Tap again to discard this game')
+          : h('button', { class: 'btn block danger', onclick: function () { S.modal.confirmNew = true; renderModal(); } }, 'New game'),
+        h('p', { class: 'tiny muted', style: 'margin:0' }, 'Unofficial, fan-made notepad. Not affiliated with the makers of Clue or Cluedo.'),
+        h('button', { class: 'btn block', onclick: closeModal }, 'Close'));
+    }
+    modalRoot.appendChild(scrim);
+  }
+  var toastRoot = document.createElement('div');
+  document.body.appendChild(toastRoot);
+  function renderToast() { toastRoot.innerHTML = ''; if (S.toast) toastRoot.appendChild(h('div', { class: 'toast', role: 'status' }, S.toast)); }
+
+  restore();
+  render();
+})();
+</script>
+</body>
+</html>

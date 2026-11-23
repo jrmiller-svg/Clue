@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node tools/build.js",
     "test": "node --test test/engine.test.js",
-    "test:ui": "node tools/build.js && node test/ui.smoke.js"
+    "test:ui": "node tools/build.js && node test/ui.smoke.js && node test/notepad.smoke.js"
   },
   "license": "MIT"
 }
