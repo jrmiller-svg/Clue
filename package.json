@@ -1,0 +1,12 @@
+{
+  "name": "clue-case-notes",
+  "version": "1.0.0",
+  "description": "Clue / Cluedo solver for your phone: exact probabilities, accusation advice, and suggestion ranking.",
+  "private": true,
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "node --test test/engine.test.js",
+    "test:ui": "node tools/build.js && node test/ui.smoke.js"
+  },
+  "license": "MIT"
+}

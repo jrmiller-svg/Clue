@@ -1,0 +1,1271 @@
+<title>Clue Case Notes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#17624f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Clue / Cluedo solver: log turns, get exact probabilities for the envelope, and know when to accuse.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Special+Elite&display=swap">
+<style>
+/* Layout: one column "case file" — sticky header, scrolling sheet, fixed tab bar at the thumb. */
+:root {
+  --paper: #eef1ef;      /* scorepad paper, faint felt-green bias */
+  --card: #ffffff;
+  --ink: #1b2230;        /* navy pen ink */
+  --muted: #5a6670;
+  --line: #d3dad6;
+  --felt: #17624f;       /* billiard-table green: primary action */
+  --felt-soft: #dcebe5;
+  --stamp: #b42318;      /* envelope / solution red */
+  --stamp-soft: #f8e1de;
+  --brass: #9a6410;      /* strong lead */
+  --brass-soft: #f6ead2;
+  --chip: #f7f8f6;
+  --shadow: 0 1px 2px rgba(20, 30, 40, .08), 0 4px 16px rgba(20, 30, 40, .06);
+  --font-display: "Special Elite", "Courier New", ui-monospace, monospace;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --tabbar-h: 62px;
+  --r: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1412; --card: #161f1c; --ink: #e5ece9; --muted: #95a49e; --line: #2a3733;
+    --felt: #43b48f; --felt-soft: #173a30; --stamp: #ff6d5c; --stamp-soft: #3d1c19;
+    --brass: #e3a940; --brass-soft: #3a2c12; --chip: #1c2622;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1412; --card: #161f1c; --ink: #e5ece9; --muted: #95a49e; --line: #2a3733;
+  --felt: #43b48f; --felt-soft: #173a30; --stamp: #ff6d5c; --stamp-soft: #3d1c19;
+  --brass: #e3a940; --brass-soft: #3a2c12; --chip: #1c2622;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 15px/1.45 var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 30; background: var(--card);
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--felt) 55%, transparent); outline-offset: 2px; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+/* header */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--card); border-bottom: 1px solid var(--line);
+}
+.top-in {
+  max-width: 680px; margin: 0 auto; display: flex; align-items: center; gap: 10px;
+  padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.brand { font-family: var(--font-display); font-size: 20px; letter-spacing: .02em; white-space: nowrap; }
+.brand small { font-family: var(--font-body); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: block; margin-top: -2px; }
+.top .grow { flex: 1; min-width: 0; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 10px;
+  font-size: 13px; font-weight: 600; background: var(--chip); border: 1px solid var(--line); white-space: nowrap;
+}
+.pill.solved { background: var(--stamp); color: #fff; border-color: transparent; }
+.pill.lead { background: var(--brass-soft); color: var(--brass); border-color: transparent; }
+.pill.busy::after { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); border-top-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.icon-btn { border: 1px solid var(--line); background: var(--chip); border-radius: 10px; width: 40px; height: 40px; display: grid; place-items: center; font-size: 20px; line-height: 1; }
+
+/* page */
+main {
+  max-width: 680px; margin: 0 auto;
+  padding-block: 14px calc(var(--tabbar-h) + 28px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 14px;
+}
+main.no-tabs { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+.sheet { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sheet h2, .h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.between { justify-content: space-between; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.tiny { font-size: 12px; }
+.field-label { font-size: 13px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.stack { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+/* chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: var(--chip); border-radius: 10px;
+  padding: 8px 11px; min-height: 40px; font-size: 14px; line-height: 1.15; text-align: left;
+  display: inline-flex; align-items: center; gap: 6px; position: relative;
+}
+.chip[aria-pressed="true"] { background: var(--felt); color: #fff; border-color: var(--felt); }
+:root:not([data-theme="light"]) .chip[aria-pressed="true"] { color: var(--card); }
+:root[data-theme="light"] .chip[aria-pressed="true"] { color: #fff; }
+.chip .tag { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 5px; border-radius: 5px; background: var(--felt-soft); color: var(--felt); }
+.chip[aria-pressed="true"] .tag { background: rgba(255,255,255,.22); color: inherit; }
+.chip.dim { opacity: .55; }
+.chip:disabled { opacity: .4; cursor: not-allowed; }
+.chip.wide { flex: 1 1 auto; justify-content: center; }
+
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; border-radius: 9px; padding: 9px 6px; font-weight: 600; font-size: 14px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+
+.btn { border: 1px solid var(--line); background: var(--chip); border-radius: 12px; padding: 11px 16px; font-weight: 600; min-height: 46px; }
+.btn.primary { background: var(--felt); border-color: var(--felt); color: #fff; }
+:root:not([data-theme="light"]) .btn.primary { color: var(--card); }
+:root[data-theme="light"] .btn.primary { color: #fff; }
+.btn.danger { color: var(--stamp); }
+.btn.block { width: 100%; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary:disabled { opacity: 1; background: var(--line); border-color: var(--line); color: var(--muted); }
+.linkish { background: none; border: 0; color: var(--felt); font-weight: 600; padding: 4px 2px; font-size: 13px; }
+.save-bar { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px)); z-index: 5; display: flex; flex-direction: column; gap: 6px; padding-block: 14px 10px; margin-top: -14px; background: linear-gradient(to bottom, transparent, var(--paper) 18px); }
+.save-bar .hint { text-align: center; font-size: 12px; color: var(--muted); align-self: center; }
+
+input[type="range"] { accent-color: var(--felt); }
+input[type="checkbox"] { accent-color: var(--felt); width: 18px; height: 18px; }
+input[type="text"], select, textarea {
+  border: 1px solid var(--line); background: var(--chip); border-radius: 10px; padding: 9px 11px; min-height: 42px; width: 100%; min-width: 0;
+}
+textarea { min-height: 120px; font-family: var(--font-data); font-size: 13px; resize: vertical; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; flex: none; }
+.prow { display: flex; gap: 6px; align-items: center; }
+.prow input[type="text"] { flex: 1 1 0; width: auto; }
+.prow > .chip, .prow > .linkish, .prow > .stack { flex: none; }
+.stepper button { border: 0; background: var(--chip); width: 36px; height: 40px; font-size: 18px; }
+.stepper span { min-width: 30px; text-align: center; font-weight: 600; }
+
+/* status card */
+.case {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.case.solved { border-color: var(--stamp); box-shadow: 0 0 0 2px var(--stamp-soft); }
+.case.lead { border-color: var(--brass); box-shadow: 0 0 0 2px var(--brass-soft); }
+.slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.slot { background: var(--chip); border: 1px solid var(--line); border-radius: 10px; padding: 8px; min-width: 0; }
+.slot .k { font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.slot .v { font-weight: 600; font-size: 14px; line-height: 1.2; margin-top: 2px; overflow-wrap: anywhere; }
+.slot .p { font-family: var(--font-data); font-size: 12px; color: var(--muted); margin-top: 3px; }
+.slot.sure { background: var(--stamp-soft); border-color: transparent; }
+.slot.sure .p { color: var(--stamp); font-weight: 600; }
+.verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.verdict .big { font-family: var(--font-data); font-weight: 600; font-size: 26px; line-height: 1; }
+.stamp {
+  font-family: var(--font-display); color: var(--stamp); border: 2px solid var(--stamp); border-radius: 6px;
+  padding: 2px 8px 0; transform: rotate(-3deg); display: inline-block; letter-spacing: .08em; font-size: 15px;
+}
+
+.banner { border-radius: var(--r); padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; }
+.banner.bad { background: var(--stamp-soft); color: var(--ink); border: 1px solid var(--stamp); }
+.banner.good { background: var(--stamp); color: #fff; }
+.banner.warm { background: var(--brass-soft); border: 1px solid var(--brass); }
+.banner b { display: block; }
+.banner .grow { flex: 1; min-width: 0; }
+
+/* bars */
+.bars { display: flex; flex-direction: column; gap: 6px; }
+.bar { display: grid; grid-template-columns: minmax(0, 1fr) 54px; gap: 8px; align-items: center; font-size: 14px; }
+.bar .track { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; margin-top: -4px; }
+.bar .fill { height: 100%; background: var(--stamp); border-radius: 3px; }
+.bar .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .val { text-align: right; font-family: var(--font-data); font-size: 13px; }
+.bar.out { color: var(--muted); }
+.bar.out .lbl { text-decoration: line-through; }
+
+/* suggestion list */
+.sugg { display: flex; flex-direction: column; gap: 8px; }
+.sg { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--chip); display: flex; flex-direction: column; gap: 6px; }
+.sg .title { font-weight: 600; min-width: 0; }
+.sg .bits { white-space: nowrap; font-family: var(--font-data); font-size: 13px; }
+.sg .meter { height: 6px; border-radius: 3px; background: var(--card); overflow: hidden; }
+.sg .meter i { display: block; height: 100%; background: var(--felt); }
+.sg .meta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* notes grid */
+.grid-wrap { overflow-x: auto; margin: 0 -14px; padding: 0 14px; }
+table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+.grid th, .grid td { padding: 0; text-align: center; border-bottom: 1px solid var(--line); }
+.grid thead th { font-size: 11px; font-weight: 700; color: var(--muted); padding: 6px 2px; letter-spacing: .02em; white-space: nowrap; max-width: 56px; overflow: hidden; text-overflow: ellipsis; }
+.grid thead th.env { color: var(--stamp); }
+.grid th.card { text-align: left; font-weight: 500; position: sticky; left: 0; background: var(--card); z-index: 1; padding: 0 6px 0 0; max-width: 132px; }
+.grid th.card button { all: unset; display: block; padding: 9px 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.grid tr.cat th { text-align: left; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 0 4px; position: sticky; left: 0; background: var(--card); }
+.grid td { min-width: 38px; height: 38px; }
+.cell { display: grid; place-items: center; height: 34px; margin: 2px; border-radius: 7px; font-family: var(--font-data); font-size: 12px; }
+.cell.yes { background: var(--felt); color: #fff; font-family: var(--font-body); font-weight: 700; font-size: 15px; }
+:root:not([data-theme="light"]) .cell.yes { color: var(--card); }
+:root[data-theme="light"] .cell.yes { color: #fff; }
+.cell.no { color: var(--line); font-family: var(--font-body); font-size: 15px; }
+.cell.env.yes { background: var(--stamp); }
+.grid tr.solved th.card { color: var(--stamp); font-weight: 700; }
+.grid tr.mine th.card button { color: var(--felt); font-weight: 600; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+.legend .cell { width: 26px; height: 22px; margin: 0; display: inline-grid; vertical-align: middle; }
+
+/* history */
+.hist { display: flex; flex-direction: column; gap: 8px; }
+.ev { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card); display: flex; gap: 10px; }
+.ev.bad { border-color: var(--stamp); background: var(--stamp-soft); }
+.ev .n { font-family: var(--font-data); color: var(--muted); font-size: 12px; min-width: 26px; padding-top: 2px; }
+.ev .body { flex: 1; min-width: 0; }
+.ev .acts { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+
+/* tab bar */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--card); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px));
+}
+.tabs-in { max-width: 680px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); height: var(--tabbar-h); }
+.tabs button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); position: relative; }
+.tabs button svg { width: 22px; height: 22px; }
+.tabs button[aria-current="page"] { color: var(--felt); }
+.tabs button .dot { position: absolute; top: 9px; right: calc(50% - 18px); width: 8px; height: 8px; border-radius: 50%; background: var(--stamp); }
+
+/* modal sheet */
+.scrim { position: fixed; inset: 0; background: rgba(10, 14, 12, .45); z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
+.modal {
+  background: var(--card); width: 100%; max-width: 680px; max-height: 88vh; overflow: auto; border-radius: 16px 16px 0 0;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 12px;
+}
+.modal .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); align-self: center; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--paper); padding: 9px 14px; border-radius: 10px; font-size: 14px; z-index: 50; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-size: 14px; }
+.kbd { font-family: var(--font-data); font-size: 12px; background: var(--chip); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; }
+.prose p { margin: 0 0 8px; }
+.prose p:last-child { margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+@media (min-width: 560px) { .slot .v { font-size: 15px; } }
+</style>
+
+<div id="app"></div>
+
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  var E = window.ClueEngine;
+
+  // ------------------------------------------------------------ editions
+  var EDITIONS = {
+    classic: { label: 'Clue — classic (Mrs. White)', cats: [
+      ['Suspect', ['Miss Scarlet', 'Colonel Mustard', 'Mrs. White', 'Mr. Green', 'Mrs. Peacock', 'Professor Plum']],
+      ['Weapon', ['Candlestick', 'Knife', 'Lead Pipe', 'Revolver', 'Rope', 'Wrench']],
+      ['Room', ['Hall', 'Lounge', 'Dining Room', 'Kitchen', 'Ballroom', 'Conservatory', 'Billiard Room', 'Library', 'Study']]] },
+    modern: { label: 'Clue — 2016+ (Dr. Orchid)', cats: [
+      ['Suspect', ['Miss Scarlet', 'Colonel Mustard', 'Dr. Orchid', 'Mr. Green', 'Mrs. Peacock', 'Professor Plum']],
+      ['Weapon', ['Candlestick', 'Dagger', 'Lead Pipe', 'Revolver', 'Rope', 'Wrench']],
+      ['Room', ['Hall', 'Lounge', 'Dining Room', 'Kitchen', 'Ballroom', 'Conservatory', 'Billiard Room', 'Library', 'Study']]] },
+    cluedo: { label: 'Cluedo — UK', cats: [
+      ['Suspect', ['Miss Scarlett', 'Colonel Mustard', 'Mrs White', 'Reverend Green', 'Mrs Peacock', 'Professor Plum']],
+      ['Weapon', ['Candlestick', 'Dagger', 'Lead Piping', 'Revolver', 'Rope', 'Spanner']],
+      ['Room', ['Hall', 'Lounge', 'Dining Room', 'Kitchen', 'Ballroom', 'Conservatory', 'Billiard Room', 'Library', 'Study']]] },
+    master: { label: 'Clue — Master Detective', cats: [
+      ['Suspect', ['Miss Scarlet', 'Colonel Mustard', 'Mrs. White', 'Mr. Green', 'Mrs. Peacock', 'Professor Plum', 'Madame Rose', 'Sergeant Gray', 'Monsieur Brunette', 'Miss Peach']],
+      ['Weapon', ['Candlestick', 'Knife', 'Lead Pipe', 'Revolver', 'Rope', 'Wrench', 'Horseshoe', 'Poison']],
+      ['Room', ['Carriage House', 'Conservatory', 'Kitchen', 'Trophy Room', 'Dining Room', 'Drawing Room', 'Gazebo', 'Courtyard', 'Fountain', 'Library', 'Billiard Room', 'Studio']]] }
+  };
+
+  // ------------------------------------------------------------ state
+  var KEY = 'clue-case-notes/v1';
+  var S = {
+    game: null,            // engine-compatible game + ids on events
+    setup: null,           // setup draft
+    tab: 'log',
+    settings: { alertAt: 0.8 },
+    form: null,            // log form draft
+    editingId: null,
+    analysis: null, busy: false, culprit: null,
+    rank: null, rankRoom: -1, rankBusy: false,
+    modal: null, toast: null, confirmDel: null
+  };
+
+  function persist() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ game: S.game, game0: S.game ? null : S.game0, setup: S.game ? null : S.setup, tab: S.tab, settings: S.settings }));
+    } catch (e) { /* storage unavailable: app still works for this session */ }
+  }
+  function restore() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (d.settings) S.settings = Object.assign(S.settings, d.settings);
+      if (d.game && d.game.categories) S.game = d.game;
+      if (d.setup) S.setup = d.setup;
+      if (d.game0 && d.game0.categories) S.game0 = d.game0;
+      if (d.tab) S.tab = d.tab;
+    } catch (e) { /* ignore */ }
+  }
+
+  // ------------------------------------------------------------ helpers
+  function h(tag, props) {
+    var el = document.createElement(tag);
+    if (props) for (var k in props) {
+      var v = props[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'text') el.textContent = v;
+      else if (k === 'html') el.innerHTML = v;
+      else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+      else if (k === 'style') el.style.cssText = v;
+      else if (v === true) el.setAttribute(k, '');
+      else el.setAttribute(k, v);
+    }
+    for (var i = 2; i < arguments.length; i++) add(el, arguments[i]);
+    return el;
+  }
+  function add(el) {
+    for (var i = 1; i < arguments.length; i++) addOne(el, arguments[i]);
+  }
+  function addOne(el, c) {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(function (x) { addOne(el, x); }); return; }
+    el.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+  }
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+  function deck(game) {
+    var cards = [], cat = [];
+    game.categories.forEach(function (c, ci) { c.cards.forEach(function (n) { cards.push(n); cat.push(ci); }); });
+    return { names: cards, cat: cat, byCat: game.categories.map(function (c, ci) { var a = []; cat.forEach(function (x, i) { if (x === ci) a.push(i); }); return a; }) };
+  }
+  function pct(p, certain) {
+    if (certain === 1) return '100%';
+    if (certain === 0) return '0%';
+    if (p > 0 && p < 0.005) return '<1%';
+    if (p < 1 && p > 0.995) return '>99%';
+    return Math.round(p * 100) + '%';
+  }
+  function fmtBig(n) {
+    if (!isFinite(n)) return '—';
+    if (n < 1e15) return Math.round(n).toLocaleString();
+    return n.toExponential(2).replace('e+', ' × 10^');
+  }
+  function playerName(i) { return S.game.players[i].name + (i === S.game.me ? ' (you)' : ''); }
+  function shortName(i) { return i === S.game.me ? 'You' : S.game.players[i].name; }
+  function eliminated() {
+    var out = {};
+    (S.game.events || []).forEach(function (ev) { if (ev.type === 'accuse' && !ev.correct) out[ev.accuser] = true; });
+    return out;
+  }
+  function nextSuggester() {
+    var g = S.game, P = g.players.length, evs = g.events || [], out = eliminated();
+    var last = -1;
+    for (var i = evs.length - 1; i >= 0; i--) if (evs[i].type === 'suggest' || evs[i].type === 'accuse') { last = evs[i].type === 'suggest' ? evs[i].suggester : evs[i].accuser; break; }
+    for (var k = 1; k <= P; k++) {
+      var c = ((last < 0 ? -1 : last) + k + P) % P;
+      if (!out[c]) return c;
+    }
+    return 0;
+  }
+  function toast(msg) {
+    S.toast = msg; renderToast();
+    clearTimeout(toast.t);
+    toast.t = setTimeout(function () { S.toast = null; renderToast(); }, 2200);
+  }
+
+  // ------------------------------------------------------- engine bridge
+  // Runs the solver in a Web Worker so the UI never freezes; falls back to
+  // the main thread if workers are unavailable.
+  function engineHandler(d, cache) {
+    var Eng = typeof ClueEngine !== 'undefined' ? ClueEngine : self.ClueEngine;
+    if (d.type === 'analyze') {
+      var res = Eng.analyze(d.game, { samples: 3000 });
+      cache.res = res;
+      var out = {};
+      for (var k in res) if (k !== 'samples') out[k] = res[k];
+      return out;
+    }
+    if (d.type === 'rank') {
+      if (!cache.res || !cache.res.nSamples) return null;
+      var opts = d.rooms ? { rooms: d.rooms } : {};
+      var rk = Eng.rankSuggestions(d.game, cache.res, opts);
+      if (!rk) return null;
+      var bestRoom = {};
+      rk.list.forEach(function (it) {
+        var r = it.cards[2];
+        if (!bestRoom[r] || bestRoom[r].eig < it.eig) bestRoom[r] = it;
+      });
+      var rooms = Object.keys(bestRoom).map(function (r) { return bestRoom[r]; }).sort(function (a, b) { return b.eig - a.eig; });
+      return { prior: rk.prior, top: rk.list.slice(0, 8), rooms: rooms };
+    }
+    if (d.type === 'culprit') return Eng.findContradiction(d.game);
+    return null;
+  }
+  var Bridge = (function () {
+    var worker = null, seq = 0, pending = {}, mainCache = {};
+    function runMain(msg) {
+      return new Promise(function (res, rej) {
+        setTimeout(function () { try { res(engineHandler(msg, mainCache)); } catch (e) { rej(e); } }, 16);
+      });
+    }
+    try {
+      var srcEl = document.getElementById('engine-src');
+      if (srcEl && window.Worker && window.Blob && window.URL) {
+        var code = srcEl.textContent + '\n;var cache = {};\nvar engineHandler = ' + engineHandler.toString() +
+          ';\nself.onmessage = function (e) { var d = e.data; try { self.postMessage({ id: d.id, result: engineHandler(d, cache) }); } catch (err) { self.postMessage({ id: d.id, error: String(err && err.message || err) }); } };';
+        worker = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+        worker.onmessage = function (e) {
+          var p = pending[e.data.id];
+          if (!p) return;
+          delete pending[e.data.id];
+          if (e.data.error) p.rej(new Error(e.data.error)); else p.res(e.data.result);
+        };
+        worker.onerror = function () {
+          worker = null;
+          var waiting = pending; pending = {};
+          Object.keys(waiting).forEach(function (id) { runMain(waiting[id].msg).then(waiting[id].res, waiting[id].rej); });
+        };
+      }
+    } catch (e) { worker = null; }
+    return {
+      call: function (msg) {
+        if (!worker) return runMain(msg);
+        msg.id = ++seq;
+        return new Promise(function (res, rej) { pending[msg.id] = { res: res, rej: rej, msg: msg }; worker.postMessage(msg); });
+      }
+    };
+  })();
+
+  function engineGame() {
+    var g = S.game;
+    return { categories: g.categories, players: g.players, me: g.me, myCards: g.myCards, faceUp: g.faceUp || [], events: g.events };
+  }
+  var analyzeSeq = 0;
+  function analyze() {
+    if (!S.game) return;
+    var my = ++analyzeSeq;
+    S.busy = true; S.rank = null; renderHeader();
+    Bridge.call({ type: 'analyze', game: engineGame() }).then(function (res) {
+      if (my !== analyzeSeq) return;
+      S.analysis = res; S.busy = false; S.culprit = null;
+      if (res && res.ok === false && res.contradiction) {
+        Bridge.call({ type: 'culprit', game: engineGame() }).then(function (idx) {
+          if (my !== analyzeSeq) return;
+          S.culprit = idx; render();
+        });
+      }
+      render();
+      if (S.tab === 'advice') requestRank();
+    }, function (err) {
+      if (my !== analyzeSeq) return;
+      S.busy = false; S.analysis = { ok: false, error: String(err) }; render();
+    });
+  }
+  var rankSeq = 0;
+  function requestRank() {
+    var A = S.analysis;
+    if (!A || !A.ok || S.rankBusy) return;
+    var my = ++rankSeq, mySeq = analyzeSeq;
+    S.rankBusy = true;
+    var rooms = S.rankRoom >= 0 ? [S.rankRoom] : null;
+    Bridge.call({ type: 'rank', game: engineGame(), rooms: rooms }).then(function (r) {
+      S.rankBusy = false;
+      if (my !== rankSeq || mySeq !== analyzeSeq) return;
+      S.rank = { room: S.rankRoom, data: r };
+      if (S.tab === 'advice') render();
+    }, function () { S.rankBusy = false; });
+  }
+
+  // ------------------------------------------------------- derived info
+  function solvedInfo() {
+    var A = S.analysis;
+    if (!A || !A.ok) return null;
+    var g = S.game, d = deck(g), N = A.N, ENV = A.ENV;
+    var slots = d.byCat.map(function (list, ci) {
+      var best = -1, bp = -1, sure = false, alive = 0;
+      list.forEach(function (c) {
+        var p = A.prob[ENV * N + c];
+        if (p > 0) alive++;
+        if (p > bp) { bp = p; best = c; }
+        if (A.known[ENV * N + c] === E.YES) sure = true;
+      });
+      return { ci: ci, name: g.categories[ci].name, card: best, p: bp, sure: sure, alive: alive };
+    });
+    var top = A.triples && A.triples[0];
+    var solved = slots.every(function (s) { return s.sure; });
+    return { slots: slots, top: top, solved: solved, pTop: solved ? 1 : (top ? top.p : 0) };
+  }
+
+  // ------------------------------------------------------------ render
+  var app = document.getElementById('app');
+  function render() {
+    persist();
+    app.innerHTML = '';
+    if (!S.game) { app.appendChild(viewHeader()); app.appendChild(viewSetup()); renderModal(); return; }
+    app.appendChild(viewHeader());
+    var main = h('main');
+    if (S.tab === 'log') add(main, viewLog());
+    else if (S.tab === 'notes') add(main, viewNotes());
+    else if (S.tab === 'advice') add(main, viewAdvice());
+    else if (S.tab === 'history') add(main, viewHistory());
+    app.appendChild(main);
+    app.appendChild(viewTabs());
+    renderModal();
+    renderToast();
+  }
+  function renderHeader() {
+    var old = app.querySelector('.top');
+    if (old) old.replaceWith(viewHeader());
+  }
+
+  function viewHeader() {
+    var info = S.game && solvedInfo();
+    var pill = null;
+    if (S.game) {
+      if (S.busy) pill = h('span', { class: 'pill busy' }, 'Solving');
+      else if (S.analysis && S.analysis.ok === false) pill = h('span', { class: 'pill', style: 'color:var(--stamp)' }, 'Check log');
+      else if (info && info.solved) pill = h('span', { class: 'pill solved' }, 'Solved');
+      else if (info) pill = h('span', { class: 'pill' + (info.pTop >= S.settings.alertAt ? ' lead' : '') }, h('span', { class: 'num' }, pct(info.pTop)), ' best guess');
+    }
+    return h('header', { class: 'top' }, h('div', { class: 'top-in' },
+      h('div', { class: 'brand' }, 'Case Notes', h('small', null, 'Clue solver')),
+      h('div', { class: 'grow' }),
+      pill,
+      S.game ? h('button', { class: 'icon-btn', 'aria-label': 'Menu', onclick: function () { S.modal = { kind: 'menu' }; renderModal(); } }, '⋯') : null
+    ));
+  }
+
+  var TAB_ICONS = {
+    log: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>',
+    advice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>',
+    history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>'
+  };
+  function viewTabs() {
+    var info = solvedInfo();
+    var hot = info && (info.solved || info.pTop >= S.settings.alertAt);
+    var tabs = [['log', 'Log turn'], ['notes', 'Notes'], ['advice', 'Advice'], ['history', 'History']];
+    return h('nav', { class: 'tabs', 'aria-label': 'Sections' }, h('div', { class: 'tabs-in' }, tabs.map(function (t) {
+      var b = h('button', {
+        'aria-current': S.tab === t[0] ? 'page' : null,
+        onclick: function () { S.tab = t[0]; S.confirmDel = null; render(); window.scrollTo(0, 0); if (t[0] === 'advice' && !S.rank) requestRank(); }
+      });
+      b.innerHTML = TAB_ICONS[t[0]];
+      add(b, t[1]);
+      if (t[0] === 'advice' && hot) add(b, h('span', { class: 'dot' }));
+      if (t[0] === 'history' && S.analysis && S.analysis.ok === false) add(b, h('span', { class: 'dot' }));
+      return b;
+    })));
+  }
+
+  // ------------------------------------------------------------- setup
+  function newSetup(edition) {
+    var ed = EDITIONS[edition || 'classic'];
+    var s = {
+      edition: edition || 'classic',
+      cats: ed.cats.map(function (c) { return { name: c[0], cards: c[1].slice() }; }),
+      players: [{ name: 'Me', hand: 0 }, { name: 'Player 2', hand: 0 }, { name: 'Player 3', hand: 0 }, { name: 'Player 4', hand: 0 }],
+      me: 0, faceUpMode: false, myCards: [], faceUp: []
+    };
+    autoHands(s);
+    return s;
+  }
+  function setupDeckSize(s) { return s.cats.reduce(function (a, c) { return a + c.cards.length; }, 0); }
+  function autoHands(s) {
+    var N = setupDeckSize(s), P = s.players.length, D = N - s.cats.length;
+    var base = Math.floor(D / P), extra = D % P;
+    s.players.forEach(function (p, i) { p.hand = base + (!s.faceUpMode && i < extra ? 1 : 0); });
+  }
+  function setupProblems(s) {
+    var N = setupDeckSize(s), P = s.players.length;
+    var dealt = s.players.reduce(function (a, p) { return a + p.hand; }, 0);
+    var out = [];
+    if (P < 2) out.push('Add at least two players.');
+    if (s.cats.some(function (c) { return c.cards.length < 2; })) out.push('Each category needs at least two cards.');
+    var need = N - s.cats.length - (s.faceUpMode ? s.faceUp.length : 0);
+    if (dealt !== need) out.push('Hand sizes add up to ' + dealt + ', but ' + need + ' cards are dealt.');
+    var mh = s.players[s.me] ? s.players[s.me].hand : 0;
+    if (s.myCards.length !== mh) out.push('Pick your ' + mh + ' cards (' + s.myCards.length + ' picked).');
+    if (s.faceUpMode) {
+      var expect = (N - s.cats.length) % P;
+      if (s.faceUp.length !== expect) out.push('Pick the ' + expect + ' face-up card' + (expect === 1 ? '' : 's') + ' (' + s.faceUp.length + ' picked).');
+    }
+    if (s.players.some(function (p) { return !p.name.trim(); })) out.push('Give every player a name.');
+    return out;
+  }
+  function viewSetup() {
+    if (!S.setup) S.setup = newSetup('classic');
+    var s = S.setup;
+    var main = h('main', { class: 'no-tabs' });
+    var N = setupDeckSize(s), P = s.players.length;
+    function rerender() { render(); }
+
+    // intro
+    add(main, h('section', { class: 'sheet' },
+      h('h2', null, 'New case'),
+      h('p', { class: 'small', style: 'margin:0' }, 'Set up the table once. Then log each suggestion as it happens. The solver counts every way the cards could have been dealt that fits what you have seen, so its odds are exact.'),
+      h('div', { class: 'row' }, h('button', { class: 'linkish', onclick: loadDemo }, 'Explore a demo game first →'))
+    ));
+
+    // edition
+    var sel = h('select', { id: 'edition', 'aria-label': 'Edition', onchange: function (e) {
+      var v = e.target.value;
+      if (v === 'custom') { s.edition = 'custom'; }
+      else { var keep = s.players; S.setup = newSetup(v); S.setup.players = keep; S.setup.me = s.me; autoHands(S.setup); }
+      rerender();
+    } });
+    Object.keys(EDITIONS).forEach(function (k) { add(sel, h('option', { value: k, selected: s.edition === k }, EDITIONS[k].label)); });
+    add(sel, h('option', { value: 'custom', selected: s.edition === 'custom' }, 'Custom / edited cards'));
+    var det = h('details', null, h('summary', null, 'Edit card names (' + s.cats.map(function (c) { return c.cards.length; }).join(' / ') + ')'),
+      h('div', { class: 'stack', style: 'margin-top:10px' }, s.cats.map(function (c, ci) {
+        return h('label', { class: 'stack' }, h('span', { class: 'field-label' }, c.name + 's — one per line'),
+          h('textarea', { id: 'cat-' + ci, rows: Math.min(12, c.cards.length + 1), 'data-ci': ci }, c.cards.join('\n')));
+      }), h('button', { class: 'btn', onclick: function () {
+        var changed = false;
+        s.cats.forEach(function (c, ci) {
+          var el = document.getElementById('cat-' + ci);
+          var next = el.value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+          if (next.join('\n') !== c.cards.join('\n')) { c.cards = next; changed = true; }
+        });
+        if (changed) { s.edition = 'custom'; s.myCards = []; s.faceUp = []; autoHands(s); toast('Card names updated'); }
+        rerender();
+      } }, 'Apply card names')));
+    add(main, h('section', { class: 'sheet' }, h('h2', null, 'Edition'), sel, det));
+
+    // players
+    var plist = h('div', { class: 'stack' });
+    s.players.forEach(function (p, i) {
+      add(plist, h('div', { class: 'prow' },
+        h('div', { class: 'stack', style: 'gap:2px' },
+          h('button', { class: 'linkish', 'aria-label': 'Move up', disabled: i === 0, style: 'padding:0 4px', onclick: function () { move(i, -1); } }, '▲'),
+          h('button', { class: 'linkish', 'aria-label': 'Move down', disabled: i === P - 1, style: 'padding:0 4px', onclick: function () { move(i, 1); } }, '▼')),
+        h('input', { type: 'text', id: 'pname-' + i, value: p.name, autocomplete: 'off', 'aria-label': 'Player ' + (i + 1) + ' name', oninput: function (e) { p.name = e.target.value; persist(); refreshStart(); } }),
+        h('button', { class: 'chip', 'aria-pressed': s.me === i ? 'true' : 'false', onclick: function () { s.me = i; s.myCards = []; rerender(); } }, 'Me'),
+        h('div', { class: 'stepper', 'aria-label': 'Hand size' },
+          h('button', { 'aria-label': 'Fewer cards', onclick: function () { if (p.hand > 0) { p.hand--; if (i === s.me) s.myCards = s.myCards.slice(0, p.hand); rerender(); } } }, '−'),
+          h('span', { class: 'num' }, p.hand),
+          h('button', { 'aria-label': 'More cards', onclick: function () { p.hand++; rerender(); } }, '+')),
+        h('button', { class: 'linkish', 'aria-label': 'Remove player', disabled: P <= 2, style: 'color:var(--stamp)', onclick: function () {
+          s.players.splice(i, 1); if (s.me >= s.players.length) s.me = 0; else if (s.me > i) s.me--; else if (s.me === i) { s.me = 0; s.myCards = []; }
+          autoHands(s); rerender();
+        } }, '✕')));
+    });
+    function move(i, dlt) {
+      var j = i + dlt, t = s.players[i]; s.players[i] = s.players[j]; s.players[j] = t;
+      if (s.me === i) s.me = j; else if (s.me === j) s.me = i;
+      rerender();
+    }
+    var D = N - s.cats.length, extra = D % P;
+    add(main, h('section', { class: 'sheet' },
+      h('h2', null, 'Players in turn order'),
+      h('p', { class: 'small muted', style: 'margin:0' }, 'List everyone clockwise, as they sit. Refutations go around in this order.'),
+      plist,
+      h('div', { class: 'row between' },
+        h('button', { class: 'btn', disabled: P >= 10, onclick: function () { s.players.push({ name: 'Player ' + (P + 1), hand: 0 }); autoHands(s); rerender(); } }, '+ Add player'),
+        h('button', { class: 'linkish', onclick: function () { autoHands(s); rerender(); } }, 'Reset hand sizes')),
+      h('p', { class: 'small', style: 'margin:0' }, D + ' cards are dealt (' + N + ' minus the ' + s.cats.length + ' in the envelope). ',
+        extra ? (s.faceUpMode ? extra + ' leftover card' + (extra > 1 ? 's go' : ' goes') + ' face up.' : extra + ' player' + (extra > 1 ? 's get' : ' gets') + ' one extra card. Set the + / − counts to match who actually got them.') : 'Everyone gets the same number.'),
+      extra ? h('label', { class: 'row small' }, h('input', { type: 'checkbox', id: 'faceup', checked: s.faceUpMode, onchange: function (e) { s.faceUpMode = e.target.checked; s.faceUp = []; autoHands(s); s.myCards = s.myCards.slice(0, s.players[s.me].hand); rerender(); } }), 'We put leftover cards face up instead') : null
+    ));
+
+    // my cards
+    var d = { byCat: [], names: [] };
+    var idx = 0;
+    s.cats.forEach(function (c) { var a = []; c.cards.forEach(function (n) { a.push(idx++); d.names.push(n); }); d.byCat.push(a); });
+    function cardPicker(list, limit, label, blocked) {
+      return h('div', { class: 'stack' }, s.cats.map(function (c, ci) {
+        return h('div', { class: 'stack', style: 'gap:6px' }, h('span', { class: 'field-label' }, c.name + 's'),
+          h('div', { class: 'chips' }, d.byCat[ci].map(function (cid) {
+            var on = list.indexOf(cid) >= 0;
+            return h('button', { class: 'chip', 'aria-pressed': on ? 'true' : 'false', disabled: blocked.indexOf(cid) >= 0, onclick: function () {
+              var k = list.indexOf(cid);
+              if (k >= 0) list.splice(k, 1);
+              else if (list.length < limit) list.push(cid);
+              else { toast('That is ' + limit + ' already. Tap one to unselect it.'); return; }
+              rerender();
+            } }, d.names[cid]);
+          })));
+      }));
+    }
+    var myHand = s.players[s.me] ? s.players[s.me].hand : 0;
+    add(main, h('section', { class: 'sheet' },
+      h('div', { class: 'row between' }, h('h2', null, 'Your cards'), h('span', { class: 'num small' + (s.myCards.length === myHand ? '' : ' muted') }, s.myCards.length + ' / ' + myHand)),
+      cardPicker(s.myCards, myHand, 'mine', s.faceUp)));
+    if (s.faceUpMode && extra) {
+      add(main, h('section', { class: 'sheet' },
+        h('div', { class: 'row between' }, h('h2', null, 'Face-up cards'), h('span', { class: 'num small' }, s.faceUp.length + ' / ' + extra)),
+        cardPicker(s.faceUp, extra, 'face', s.myCards)));
+    }
+
+    var probs = setupProblems(s);
+    add(main, h('div', { class: 'stack' },
+      h('div', { id: 'setup-hint', class: 'small muted', style: 'text-align:center' }, probs[0] || ''),
+      h('button', { id: 'start-btn', class: 'btn primary block', disabled: probs.length > 0, onclick: startGame }, S.game0 ? 'Save setup' : 'Start game'),
+      S.game0 ? h('button', { class: 'btn block', onclick: function () { S.game = S.game0; S.game0 = null; S.setup = null; render(); analyze(); } }, 'Cancel') : null
+    ));
+    return main;
+  }
+
+  function refreshStart() {
+    var probs = setupProblems(S.setup), b = document.getElementById('start-btn'), hnt = document.getElementById('setup-hint');
+    if (b) b.disabled = probs.length > 0;
+    if (hnt) hnt.textContent = probs[0] || '';
+  }
+  function startGame() {
+    if (setupProblems(S.setup).length) return;
+    var s = S.setup;
+    var keepEvents = S.game0 && JSON.stringify(S.game0.categories) === JSON.stringify(s.cats) && S.game0.players.length === s.players.length;
+    S.game = {
+      categories: s.cats.map(function (c) { return { name: c.name, cards: c.cards.slice() }; }),
+      players: s.players.map(function (p) { return { name: p.name.trim(), hand: p.hand }; }),
+      me: s.me, myCards: s.myCards.slice(), faceUp: s.faceUpMode ? s.faceUp.slice() : [],
+      events: keepEvents ? S.game0.events : [], setup: JSON.parse(JSON.stringify(s))
+    };
+    S.game0 = null; S.setup = null; S.form = null; S.tab = 'log'; S.analysis = null;
+    render(); analyze();
+  }
+
+  function loadDemo() {
+    // A real (hidden) deal; every entry below is derived from it with the
+    // standard refutation rules, so the demo log is always consistent.
+    // Card indices: suspects 0-5, weapons 6-11, rooms 12-20 (classic order).
+    var ENV = 4;
+    var owner = [1, 0, 2, ENV, 3, 3, 1, 2, ENV, 0, 3, 1, 1, 0, 2, 1, 3, 0, 2, ENV, 0];
+    var g = {
+      categories: EDITIONS.classic.cats.map(function (c) { return { name: c[0], cards: c[1].slice() }; }),
+      players: [{ name: 'You', hand: 5 }, { name: 'Ava', hand: 5 }, { name: 'Ben', hand: 4 }, { name: 'Cleo', hand: 4 }],
+      me: 0, myCards: [], faceUp: [], events: [], demo: true
+    };
+    owner.forEach(function (o, c) { if (o === 0) g.myCards.push(c); });
+    var script = [
+      [0, [0, 6, 12]], [1, [3, 10, 15]], [2, [5, 7, 18]], [3, [2, 11, 14]], [0, [4, 8, 16]], [1, [0, 9, 19]],
+      [2, [3, 7, 12]], [3, [5, 6, 15]], [0, [2, 10, 18]]
+    ];
+    script.forEach(function (sg) {
+      var sug = sg[0], cards = sg[1], passers = [], refuter = -1, shown = -1;
+      for (var i = 1; i < 4; i++) {
+        var q = (sug + i) % 4;
+        var held = cards.filter(function (c) { return owner[c] === q; });
+        if (held.length) { refuter = q; if (sug === 0 || q === 0) shown = held[held.length - 1]; break; }
+        passers.push(q);
+      }
+      g.events.push({ id: uid(), type: 'suggest', suggester: sug, cards: cards, refuter: refuter, shown: shown, passers: passers });
+    });
+    S.game = g; S.setup = null; S.tab = 'advice'; S.analysis = null; S.form = null; S.rank = null;
+    render(); analyze();
+    toast('Demo game loaded. Start your own from the ⋯ menu.');
+  }
+
+  // --------------------------------------------------------------- log
+  function blankForm(kind) {
+    var f = { kind: kind || 'suggest', suggester: nextSuggester(), cards: [-1, -1, -1], refuter: null, shown: -1, passOverride: null, correct: false, owner: -1, card: -1, has: true };
+    return f;
+  }
+  function defaultPassers(f) {
+    var P = S.game.players.length, out = [];
+    if (f.refuter === null || f.suggester < 0) return out;
+    for (var i = 1; i < P; i++) {
+      var q = (f.suggester + i) % P;
+      if (q === f.refuter) break;
+      out.push(q);
+    }
+    return out;
+  }
+  function passers(f) { return f.passOverride || defaultPassers(f); }
+
+  function viewStatusCard() {
+    var A = S.analysis, info = solvedInfo(), g = S.game, d = deck(g);
+    if (!A) return h('section', { class: 'case' }, h('div', { class: 'muted small' }, 'Solving…'));
+    if (A.ok === false) return null;
+    var cls = 'case' + (info.solved ? ' solved' : info.pTop >= S.settings.alertAt ? ' lead' : '');
+    var verdict;
+    if (info.solved) {
+      verdict = h('div', { class: 'verdict' }, h('span', { class: 'stamp' }, 'Case closed'), h('span', { class: 'small' }, 'Certain. Make your accusation.'));
+    } else if (info.pTop >= S.settings.alertAt) {
+      verdict = h('div', { class: 'verdict' }, h('span', { class: 'big', style: 'color:var(--brass)' }, pct(info.pTop)), h('span', { class: 'small' }, 'Strong lead — accusing now would be right ' + pct(info.pTop) + ' of the time.'));
+    } else {
+      verdict = h('div', { class: 'verdict' }, h('span', { class: 'big' }, pct(info.pTop)), h('span', { class: 'small muted' }, 'chance the best guess is right · ' + A.nSolutions + ' combination' + (A.nSolutions === 1 ? '' : 's') + ' left'));
+    }
+    var slots = h('div', { class: 'slots' }, info.slots.map(function (s) {
+      return h('div', { class: 'slot' + (s.sure ? ' sure' : '') },
+        h('div', { class: 'k' }, s.name),
+        h('div', { class: 'v' }, d.names[s.card]),
+        h('div', { class: 'p' }, s.sure ? 'certain' : pct(s.p) + ' · ' + s.alive + ' left'));
+    }));
+    return h('section', { class: cls, 'aria-live': 'polite' }, verdict, slots);
+  }
+
+  function contradictionBanner() {
+    var A = S.analysis;
+    if (!A || A.ok !== false) return null;
+    if (A.configError) return h('div', { class: 'banner bad' }, h('div', { class: 'grow' }, h('b', null, 'Setup problem'), A.configError));
+    var msg;
+    if (S.culprit == null) msg = 'Looking for the entry that conflicts…';
+    else if (S.culprit === -1) msg = 'Your setup (your hand or hand sizes) conflicts with itself. Check it from the ⋯ menu.';
+    else msg = 'Entry #' + (S.culprit + 1) + ' conflicts with earlier entries — no deal of the cards fits all of them. It is usually a mis-tap: wrong player, wrong card, or someone forgot to show.';
+    return h('div', { class: 'banner bad', role: 'alert' }, h('div', { class: 'grow' }, h('b', null, 'Something doesn’t add up'), msg),
+      S.culprit != null && S.culprit >= 0 ? h('button', { class: 'btn', onclick: function () { S.tab = 'history'; render(); } }, 'Review') : null);
+  }
+
+  function viewLog() {
+    if (!S.form) S.form = blankForm('suggest');
+    var f = S.form, g = S.game, d = deck(g), P = g.players.length, out = eliminated();
+    var nodes = [];
+    nodes.push(contradictionBanner());
+    nodes.push(viewStatusCard());
+    var editing = S.editingId != null;
+    var form = h('section', { class: 'sheet' });
+    if (editing) add(form, h('div', { class: 'banner warm' }, h('div', { class: 'grow' }, h('b', null, 'Editing entry #' + (indexOfEvent(S.editingId) + 1)), 'Save to replace it, or cancel.')));
+    else add(form, h('div', { class: 'row between' }, h('h2', null, 'Entry #' + ((g.events || []).length + 1)), h('span', { class: 'tiny muted' }, 'Turn order: ' + g.players.map(function (p, i) { return shortName(i); }).join(' → '))));
+    add(form, h('div', { class: 'seg', role: 'group', 'aria-label': 'Entry type' }, [['suggest', 'Suggestion'], ['accuse', 'Accusation'], ['fact', 'Saw a card']].map(function (k) {
+      return h('button', { 'aria-pressed': f.kind === k[0] ? 'true' : 'false', onclick: function () { var keep = f.suggester; S.form = blankForm(k[0]); S.form.suggester = keep; render(); } }, k[1]);
+    })));
+
+    function playerChips(value, onPick, opts) {
+      opts = opts || {};
+      return h('div', { class: 'chips' }, (opts.order || g.players.map(function (_, i) { return i; })).map(function (i) {
+        return h('button', { class: 'chip' + (out[i] && opts.dimOut ? ' dim' : ''), 'aria-pressed': value === i ? 'true' : 'false', disabled: opts.disable && opts.disable(i), onclick: function () { onPick(i); } },
+          shortName(i), out[i] && opts.dimOut ? h('span', { class: 'tag' }, 'out') : null);
+      }), opts.extra || null);
+    }
+    function cardChips(ci, value, onPick, filter) {
+      return h('div', { class: 'chips' }, d.byCat[ci].filter(filter || function () { return true; }).map(function (c) {
+        var mine = g.myCards.indexOf(c) >= 0;
+        var faceUp = (g.faceUp || []).indexOf(c) >= 0;
+        return h('button', { class: 'chip', 'aria-pressed': value === c ? 'true' : 'false', onclick: function () { onPick(c); } },
+          d.names[c], mine ? h('span', { class: 'tag' }, 'yours') : null, faceUp ? h('span', { class: 'tag' }, 'face up') : null);
+      }));
+    }
+    function threeCards() {
+      return g.categories.map(function (c, ci) {
+        return h('div', { class: 'stack' }, h('span', { class: 'field-label' }, c.name),
+          cardChips(ci, f.cards[ci], function (cid) { f.cards[ci] = f.cards[ci] === cid ? -1 : cid; f.shown = -1; render(); }));
+      });
+    }
+
+    var valid = false, hint = '';
+    if (f.kind === 'suggest') {
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Who is suggesting?'),
+        playerChips(f.suggester, function (i) { f.suggester = i; f.refuter = null; f.passOverride = null; f.shown = -1; render(); }, { dimOut: true })));
+      add(form, threeCards());
+      var order = [];
+      for (var i = 1; i < P; i++) order.push((f.suggester + i) % P);
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Who showed a card?', h('span', { class: 'tiny' }, 'in turn order')),
+        playerChips(f.refuter, function (i) { f.refuter = f.refuter === i ? null : i; f.passOverride = null; f.shown = -1; render(); },
+          { order: order, extra: h('button', { class: 'chip', 'aria-pressed': f.refuter === -1 ? 'true' : 'false', onclick: function () { f.refuter = f.refuter === -1 ? null : -1; f.passOverride = null; f.shown = -1; render(); } }, 'No one') })));
+      if (f.refuter !== null) {
+        var ps = passers(f);
+        var editPass = !!f.editPass;
+        var passLine = h('div', { class: 'small' },
+          ps.length ? h('span', null, h('b', null, 'Passed: '), ps.map(shortName).join(', '), ' — they hold none of these.') : h('span', { class: 'muted' }, 'Nobody passed before them.'),
+          ' ', h('button', { class: 'linkish', onclick: function () { f.editPass = !editPass; render(); } }, editPass ? 'Done' : 'Edit'));
+        add(form, passLine);
+        if (editPass) {
+          add(form, h('div', { class: 'stack' }, h('span', { class: 'tiny muted' }, 'Tap to mark who said they had none (for house rules or corrections).'),
+            h('div', { class: 'chips' }, order.filter(function (q) { return q !== f.refuter; }).map(function (q) {
+              var on = ps.indexOf(q) >= 0;
+              return h('button', { class: 'chip', 'aria-pressed': on ? 'true' : 'false', onclick: function () {
+                var cur = passers(f).slice(), k = cur.indexOf(q);
+                if (k >= 0) cur.splice(k, 1); else cur.push(q);
+                f.passOverride = cur; render();
+              } }, shortName(q) + ' passed');
+            }))));
+        }
+      }
+      var cardsSet = f.cards.every(function (c) { return c >= 0; });
+      if (f.refuter !== null && f.refuter >= 0 && f.suggester === g.me && cardsSet) {
+        add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Which card did ' + shortName(f.refuter) + ' show you?'),
+          h('div', { class: 'chips' }, f.cards.map(function (c) {
+            return h('button', { class: 'chip', 'aria-pressed': f.shown === c ? 'true' : 'false', onclick: function () { f.shown = f.shown === c ? -1 : c; render(); } }, d.names[c]);
+          }), h('button', { class: 'chip', 'aria-pressed': f.shown === -2 ? 'true' : 'false', onclick: function () { f.shown = f.shown === -2 ? -1 : -2; render(); } }, 'Didn’t see'))));
+      }
+      if (f.refuter === g.me && cardsSet) {
+        var mineHere = f.cards.filter(function (c) { return g.myCards.indexOf(c) >= 0; });
+        if (!mineHere.length) add(form, h('div', { class: 'banner bad small' }, 'You don’t hold any of these three cards, so you can’t be the one who showed.'));
+        else {
+          var adv = showAdvice(f.suggester, mineHere);
+          add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Which card did you show? ', h('span', { class: 'tiny' }, 'optional')),
+            h('div', { class: 'chips' }, adv.map(function (a) {
+              return h('button', { class: 'chip', 'aria-pressed': f.shown === a.card ? 'true' : 'false', onclick: function () { f.shown = f.shown === a.card ? -1 : a.card; render(); } }, d.names[a.card], a.tag ? h('span', { class: 'tag' }, a.tag) : null);
+            })),
+            adv[0] && adv[0].tip ? h('div', { class: 'tiny muted' }, adv[0].tip) : null));
+        }
+      }
+      valid = f.suggester >= 0 && cardsSet && f.refuter !== null;
+      if (f.refuter === g.me && cardsSet && !f.cards.some(function (c) { return g.myCards.indexOf(c) >= 0; })) valid = false;
+      if (valid && f.refuter >= 0 && f.suggester === g.me && f.shown === -1) { valid = false; hint = 'Pick the card you were shown (or “Didn’t see”).'; }
+      if (!valid && !hint) hint = f.suggester < 0 ? 'Pick who is suggesting.' : !cardsSet ? 'Pick a ' + g.categories.map(function (c) { return c.name.toLowerCase(); }).join(', ') + '.' : f.refuter === null ? 'Pick who showed a card, or “No one”.' : '';
+    } else if (f.kind === 'accuse') {
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Who is accusing?'),
+        playerChips(f.suggester, function (i) { f.suggester = i; render(); })));
+      add(form, threeCards());
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Result'),
+        h('div', { class: 'seg' },
+          h('button', { 'aria-pressed': !f.correct ? 'true' : 'false', onclick: function () { f.correct = false; render(); } }, 'Wrong'),
+          h('button', { 'aria-pressed': f.correct ? 'true' : 'false', onclick: function () { f.correct = true; render(); } }, 'Correct'))));
+      add(form, h('p', { class: 'tiny muted', style: 'margin:0' }, 'A wrong accusation rules out that exact combination. The player is out but still shows cards.'));
+      valid = f.suggester >= 0 && f.cards.every(function (c) { return c >= 0; });
+      if (!valid) hint = 'Pick the accuser and all three cards.';
+    } else {
+      add(form, h('p', { class: 'small muted', style: 'margin:0' }, 'For anything outside a normal turn — a card you glimpsed, or a player who told you something.'));
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Player'),
+        playerChips(f.owner, function (i) { f.owner = i; render(); }, { disable: function (i) { return i === g.me; } })));
+      add(form, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Card'),
+        h('div', { class: 'stack' }, g.categories.map(function (c, ci) { return cardChips(ci, f.card, function (cid) { f.card = cid; render(); }); }))));
+      add(form, h('div', { class: 'seg' },
+        h('button', { 'aria-pressed': f.has ? 'true' : 'false', onclick: function () { f.has = true; render(); } }, 'Has it'),
+        h('button', { 'aria-pressed': !f.has ? 'true' : 'false', onclick: function () { f.has = false; render(); } }, 'Doesn’t have it')));
+      valid = f.owner >= 0 && f.card >= 0;
+      if (!valid) hint = 'Pick a player and a card.';
+    }
+    nodes.push(form);
+    nodes.push(h('div', { class: 'save-bar' },
+      hint ? h('span', { class: 'hint' }, hint) : null,
+      h('div', { class: 'row', style: 'flex-wrap:nowrap' },
+        editing ? h('button', { class: 'btn', onclick: function () { S.editingId = null; S.form = null; S.tab = 'history'; render(); } }, 'Cancel') : null,
+        h('button', { class: 'btn primary block', disabled: !valid, onclick: saveForm }, editing ? 'Save changes' : 'Save entry'))));
+    return nodes;
+  }
+
+  // which of my cards to show when I must refute
+  function showAdvice(suggester, cards) {
+    var g = S.game, d = deck(g);
+    var shownTo = {};
+    (g.events || []).forEach(function (ev) {
+      if (ev.type === 'suggest' && ev.refuter === g.me && ev.shown >= 0) {
+        shownTo[ev.shown] = shownTo[ev.shown] || {};
+        shownTo[ev.shown][ev.suggester] = true;
+      }
+    });
+    var list = cards.map(function (c) {
+      var who = shownTo[c] ? Object.keys(shownTo[c]).map(Number) : [];
+      var score = (who.indexOf(suggester) >= 0 ? 100 : 0) + who.length;
+      return { card: c, score: score, who: who };
+    }).sort(function (a, b) { return b.score - a.score; });
+    if (list.length > 1) {
+      var b = list[0];
+      if (b.who.indexOf(suggester) >= 0) { b.tag = 'best'; b.tip = shortName(suggester) + ' has already seen ' + d.names[b.card] + ' — showing it again tells them nothing new.'; }
+      else if (b.who.length) { b.tag = 'best'; b.tip = 'You have shown ' + d.names[b.card] + ' before, so fewer players learn something new.'; }
+    }
+    return list;
+  }
+
+  function indexOfEvent(id) { return (S.game.events || []).findIndex(function (e) { return e.id === id; }); }
+  function saveForm() {
+    var f = S.form, g = S.game, ev;
+    if (f.kind === 'suggest') {
+      ev = { type: 'suggest', suggester: f.suggester, cards: f.cards.slice(), refuter: f.refuter, shown: f.shown >= 0 ? f.shown : -1, passers: passers(f).slice() };
+    } else if (f.kind === 'accuse') {
+      ev = { type: 'accuse', accuser: f.suggester, cards: f.cards.slice(), correct: !!f.correct };
+    } else {
+      ev = { type: 'fact', owner: f.owner, card: f.card, has: !!f.has };
+    }
+    g.events = g.events || [];
+    if (S.editingId != null) {
+      var k = indexOfEvent(S.editingId);
+      ev.id = S.editingId;
+      if (k >= 0) g.events[k] = ev; else g.events.push(ev);
+      S.editingId = null; S.form = null; S.tab = 'history';
+      toast('Entry #' + (k + 1) + ' updated');
+    } else {
+      ev.id = uid();
+      g.events.push(ev);
+      var kind = f.kind;
+      S.form = blankForm(kind === 'fact' ? 'fact' : 'suggest');
+      toast('Entry #' + g.events.length + ' saved');
+    }
+    render(); window.scrollTo(0, 0); analyze();
+  }
+
+  function eventToForm(ev) {
+    var f = blankForm(ev.type);
+    if (ev.type === 'suggest') {
+      f.suggester = ev.suggester; f.cards = ev.cards.slice(); f.refuter = ev.refuter; f.shown = ev.shown;
+      if (ev.refuter >= 0 && ev.suggester === S.game.me && ev.shown < 0) f.shown = -2;
+      var dp = defaultPassers(f);
+      if (JSON.stringify(dp) !== JSON.stringify(ev.passers || [])) f.passOverride = (ev.passers || []).slice();
+    } else if (ev.type === 'accuse') { f.suggester = ev.accuser; f.cards = ev.cards.slice(); f.correct = ev.correct; }
+    else { f.owner = ev.owner; f.card = ev.card; f.has = ev.has; }
+    return f;
+  }
+
+  function describe(ev) {
+    var g = S.game, d = deck(g);
+    var cards = function (cs) { return cs.map(function (c) { return d.names[c]; }).join(' · '); };
+    if (ev.type === 'suggest') {
+      var who = h('b', null, shortName(ev.suggester));
+      var res;
+      if (ev.refuter === -1) res = h('span', { style: 'color:var(--stamp)' }, 'No one could show a card.');
+      else if (ev.refuter === g.me) res = 'You showed' + (ev.shown >= 0 ? ' ' + d.names[ev.shown] : ' a card') + '.';
+      else res = shortName(ev.refuter) + ' showed ' + (ev.shown >= 0 ? d.names[ev.shown] : 'a card') + '.';
+      var ps = (ev.passers || []).length ? ' Passed: ' + ev.passers.map(shortName).join(', ') + '.' : '';
+      return h('div', null, who, ' suggested ', h('span', null, cards(ev.cards)), h('div', { class: 'small muted' }, res, ps));
+    }
+    if (ev.type === 'accuse') return h('div', null, h('b', null, shortName(ev.accuser)), ' accused ', cards(ev.cards), h('div', { class: 'small', style: ev.correct ? '' : 'color:var(--stamp)' }, ev.correct ? 'Correct — game over.' : 'Wrong. They are out but still show cards.'));
+    return h('div', null, h('b', null, shortName(ev.owner)), ev.has ? ' has ' : ' does not have ', d.names[ev.card], h('div', { class: 'small muted' }, 'Noted card'));
+  }
+
+  // ------------------------------------------------------------- notes
+  function viewNotes() {
+    var A = S.analysis, g = S.game, d = deck(g);
+    var nodes = [contradictionBanner()];
+    if (!A || A.ok === false) { nodes.push(h('section', { class: 'sheet' }, h('p', { class: 'muted', style: 'margin:0' }, A ? 'Fix the log to see the notes.' : 'Solving…'))); return nodes; }
+    var N = A.N, P = A.P, ENV = A.ENV;
+    var cols = g.players.map(function (_, i) { return i; }).concat([ENV]);
+    var table = h('table', { class: 'grid' });
+    var thead = h('thead', null, h('tr', null, h('th', { class: 'card', scope: 'col' }, ''), cols.map(function (o) {
+      var label = o === ENV ? 'Envelope' : (o === g.me ? 'You' : g.players[o].name);
+      return h('th', { scope: 'col', class: o === ENV ? 'env' : '', title: label }, o === ENV ? 'Env.' : label.slice(0, 5));
+    })));
+    table.appendChild(thead);
+    var tb = h('tbody');
+    g.categories.forEach(function (cat, ci) {
+      add(tb, h('tr', { class: 'cat' }, h('th', { colspan: cols.length + 1 }, cat.name + 's')));
+      d.byCat[ci].forEach(function (c) {
+        var solved = A.known[ENV * N + c] === E.YES;
+        var mine = g.myCards.indexOf(c) >= 0;
+        var tr = h('tr', { class: (solved ? 'solved ' : '') + (mine ? 'mine' : '') });
+        add(tr, h('th', { class: 'card', scope: 'row' }, h('button', { onclick: function () { S.modal = { kind: 'card', card: c }; renderModal(); } }, d.names[c])));
+        cols.forEach(function (o) {
+          var k = A.known[o * N + c], p = A.prob[o * N + c];
+          var isEnv = o === ENV;
+          var cell;
+          if ((g.faceUp || []).indexOf(c) >= 0) cell = h('div', { class: 'cell no', title: 'Face up' }, '—');
+          else if (k === E.YES) cell = h('div', { class: 'cell yes' + (isEnv ? ' env' : ''), title: 'Certain' }, '✓');
+          else if (k === E.NO) cell = h('div', { class: 'cell no', title: 'Ruled out' }, '×');
+          else {
+            var tint = isEnv ? 'var(--stamp)' : 'var(--felt)';
+            var a = Math.round(8 + p * 52);
+            cell = h('div', { class: 'cell', style: 'background:color-mix(in srgb, ' + tint + ' ' + a + '%, transparent)' + (p > 0.6 ? ';color:#fff' : ''), title: pct(p) }, Math.round(p * 100) < 1 ? '<1' : String(Math.round(p * 100)));
+          }
+          add(tr, h('td', null, cell));
+        });
+        add(tb, tr);
+      });
+    });
+    table.appendChild(tb);
+    nodes.push(h('section', { class: 'sheet' },
+      h('div', { class: 'row between' }, h('h2', null, 'Detective notes'), h('span', { class: 'tiny muted' }, 'Tap a card for details')),
+      h('div', { class: 'legend' },
+        h('span', null, h('span', { class: 'cell yes' }, '✓'), ' certain'),
+        h('span', null, h('span', { class: 'cell no' }, '×'), ' ruled out'),
+        h('span', null, h('span', { class: 'cell', style: 'background:color-mix(in srgb, var(--felt) 30%, transparent)' }, '42'), ' % chance'),
+        h('span', { style: 'color:var(--felt);font-weight:600' }, 'Green name = your card')),
+      h('div', { class: 'grid-wrap' }, table)));
+    return nodes;
+  }
+
+  // ------------------------------------------------------------ advice
+  function viewAdvice() {
+    var A = S.analysis, g = S.game, d = deck(g);
+    var nodes = [contradictionBanner()];
+    if (!A || A.ok === false) { nodes.push(h('section', { class: 'sheet' }, h('p', { class: 'muted', style: 'margin:0' }, A ? 'Fix the log to get advice.' : 'Solving…'))); return nodes; }
+    var info = solvedInfo(), N = A.N, ENV = A.ENV;
+
+    // accusation verdict
+    var top = A.triples[0];
+    var acc = h('section', { class: 'sheet' }, h('h2', null, 'Should you accuse?'));
+    if (info.solved) {
+      add(acc, h('div', { class: 'banner good' }, h('div', { class: 'grow' }, h('b', null, 'Yes — this is certain.'),
+        info.slots.map(function (s) { return d.names[s.card]; }).join(' · '))));
+    } else if (top) {
+      var p = top.p;
+      var verdictText = p >= S.settings.alertAt
+        ? 'Strong lead. You’d be right ' + pct(p) + ' of the time. Accuse if an opponent looks close to solving it; otherwise one more suggestion could make it certain.'
+        : 'Not yet. The best guess is right only ' + pct(p) + ' of the time, and a wrong accusation knocks you out.';
+      add(acc, h('div', { class: 'verdict' }, h('span', { class: 'big', style: p >= S.settings.alertAt ? 'color:var(--brass)' : '' }, pct(p)), h('span', { class: 'small' }, top.cards.map(function (c) { return d.names[c]; }).join(' · '))));
+      add(acc, h('p', { class: 'small', style: 'margin:0' }, verdictText));
+    }
+    var slider = h('input', { type: 'range', id: 'alertAt', min: '50', max: '100', step: '5', value: String(Math.round(S.settings.alertAt * 100)), style: 'width:100%', oninput: function (e) { S.settings.alertAt = Number(e.target.value) / 100; lbl.textContent = e.target.value + '%'; }, onchange: function () { render(); } });
+    var lbl = h('span', { class: 'num' }, Math.round(S.settings.alertAt * 100) + '%');
+    add(acc, h('label', { class: 'stack', style: 'gap:4px' }, h('span', { class: 'field-label' }, 'Flag a strong lead at', lbl), slider));
+    nodes.push(acc);
+
+    // envelope per category
+    var env = h('section', { class: 'sheet' }, h('h2', null, 'What’s in the envelope'));
+    g.categories.forEach(function (cat, ci) {
+      var list = d.byCat[ci].map(function (c) { return { c: c, p: A.prob[ENV * N + c], k: A.known[ENV * N + c] }; }).sort(function (a, b) { return b.p - a.p; });
+      var alive = list.filter(function (x) { return x.p > 0; }), dead = list.length - alive.length;
+      add(env, h('div', { class: 'stack' },
+        h('div', { class: 'row between' }, h('h3', null, cat.name), h('span', { class: 'tiny muted' }, dead + ' of ' + list.length + ' ruled out')),
+        h('div', { class: 'bars' }, alive.map(function (x) {
+          return h('div', { class: 'bar' }, h('span', { class: 'lbl' }, d.names[x.c]), h('span', { class: 'val' }, x.k === E.YES ? '100%' : pct(x.p)),
+            h('div', { class: 'track' }, h('div', { class: 'fill', style: 'width:' + (x.p * 100).toFixed(1) + '%' })));
+        }))));
+    });
+    nodes.push(env);
+
+    // top combos
+    if (!info.solved && A.triples.length > 1) {
+      nodes.push(h('section', { class: 'sheet' }, h('div', { class: 'row between' }, h('h2', null, 'Most likely combinations'), h('span', { class: 'tiny muted' }, A.nSolutions + ' still possible')),
+        h('div', { class: 'bars' }, A.triples.slice(0, 6).map(function (t) {
+          return h('div', { class: 'bar' }, h('span', { class: 'lbl' }, t.cards.map(function (c) { return d.names[c]; }).join(' · ')), h('span', { class: 'val' }, pct(t.p)),
+            h('div', { class: 'track' }, h('div', { class: 'fill', style: 'width:' + (t.p * 100).toFixed(1) + '%' })));
+        }))));
+    }
+
+    // next suggestion
+    if (!info.solved) nodes.push(viewSuggest());
+
+    nodes.push(h('p', { class: 'tiny muted', style: 'margin:0 4px' },
+      A.method === 'exact' ? 'Exact: counted all ' + fmtBig(A.deals) + ' deals that fit your log (' + Math.round(A.ms) + ' ms).'
+        : A.method === 'sampled' ? 'Estimated from ' + A.nSamples.toLocaleString() + ' random deals that fit your log (this deck is too big to count exactly yet). Certain ✓ / × marks are still exact.'
+          : 'Logic only.'));
+    return nodes;
+  }
+
+  function viewSuggest() {
+    var g = S.game, d = deck(g);
+    var box = h('section', { class: 'sheet' }, h('h2', null, 'Your next suggestion'),
+      h('p', { class: 'small muted', style: 'margin:0' }, 'Ranked by how much each one is expected to narrow down the envelope. You can only suggest the room you are standing in.'));
+    var rooms = d.byCat[2];
+    add(box, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Which room are you in?'),
+      h('div', { class: 'chips' }, h('button', { class: 'chip', 'aria-pressed': S.rankRoom === -1 ? 'true' : 'false', onclick: function () { S.rankRoom = -1; S.rank = null; render(); requestRank(); } }, 'Any room'),
+        rooms.map(function (r) { return h('button', { class: 'chip', 'aria-pressed': S.rankRoom === r ? 'true' : 'false', onclick: function () { S.rankRoom = r; S.rank = null; render(); requestRank(); } }, d.names[r]); }))));
+    var RR = S.rank && S.rank.room === S.rankRoom ? S.rank : null;
+    if (!RR) { add(box, h('p', { class: 'small muted', style: 'margin:0' }, 'Working it out…')); if (!S.rankBusy) setTimeout(requestRank, 0); return box; }
+    var R = RR.data;
+    if (!R || !R.top) { add(box, h('p', { class: 'small muted', style: 'margin:0' }, 'Suggestion ranking isn’t available for this game.')); return box; }
+    var best = R.top[0] ? R.top[0].eig : 0;
+    if (!best) { add(box, h('p', { class: 'small', style: 'margin:0' }, 'No suggestion here can teach you anything new about the envelope. Try another room.')); }
+    var list = h('div', { class: 'sugg' }, R.top.slice(0, 5).map(function (it, i) {
+      var who = it.byPlayer.slice().sort(function (a, b) { return b.p - a.p; })[0];
+      var mineCount = it.cards.filter(function (c) { return g.myCards.indexOf(c) >= 0; }).length;
+      return h('div', { class: 'sg' },
+        h('div', { class: 'row between', style: 'flex-wrap:nowrap' }, h('span', { class: 'title' }, it.cards.map(function (c) { return d.names[c]; }).join(' · ')), h('span', { class: 'bits' }, it.eig.toFixed(2) + ' bits')),
+        h('div', { class: 'meter' }, h('i', { style: 'width:' + (best ? (it.eig / best * 100).toFixed(0) : 0) + '%' })),
+        h('div', { class: 'meta' },
+          h('span', null, 'No one shows: ' + pct(it.pNone)),
+          who ? h('span', null, 'Likely shown by ' + shortName(who.player) + ' (' + pct(who.p) + ')') : null,
+          mineCount ? h('span', null, 'uses ' + mineCount + ' of your cards') : null));
+    }));
+    add(box, list);
+    if (S.rankRoom === -1 && R.rooms && R.rooms.length) {
+      add(box, h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Best rooms to head for'),
+        h('div', { class: 'bars' }, R.rooms.slice(0, 4).map(function (it) {
+          return h('div', { class: 'bar' }, h('span', { class: 'lbl' }, d.names[it.cards[2]]), h('span', { class: 'val' }, it.eig.toFixed(2)),
+            h('div', { class: 'track' }, h('div', { class: 'fill', style: 'background:var(--felt);width:' + (best ? (it.eig / best * 100).toFixed(0) : 0) + '%' })));
+        }))));
+    }
+    add(box, h('p', { class: 'tiny muted', style: 'margin:0' }, 'A “bit” of information halves the remaining uncertainty. Suggesting one of your own cards is a classic trick: no one else can show it, so it focuses the answer on the other two.'));
+    return box;
+  }
+
+  // ----------------------------------------------------------- history
+  function viewHistory() {
+    var g = S.game, evs = g.events || [];
+    var nodes = [contradictionBanner()];
+    var sec = h('section', { class: 'sheet' }, h('div', { class: 'row between' }, h('h2', null, 'Log · ' + evs.length + ' entr' + (evs.length === 1 ? 'y' : 'ies')),
+      evs.length ? h('button', { class: 'linkish', onclick: function () { var e = evs.pop(); toast('Removed entry #' + (evs.length + 1)); render(); analyze(); } }, 'Undo last') : null));
+    if (!evs.length) add(sec, h('p', { class: 'muted small', style: 'margin:0' }, 'Nothing logged yet. Entries you save on the Log turn tab appear here, newest first.'));
+    var list = h('div', { class: 'hist' });
+    for (var i = evs.length - 1; i >= 0; i--) (function (i) {
+      var ev = evs[i];
+      var bad = S.culprit === i;
+      var confirming = S.confirmDel === ev.id;
+      add(list, h('div', { class: 'ev' + (bad ? ' bad' : '') },
+        h('span', { class: 'n' }, '#' + (i + 1)),
+        h('div', { class: 'body' }, describe(ev), bad ? h('div', { class: 'small', style: 'color:var(--stamp);font-weight:600' }, 'This entry conflicts with the ones before it.') : null),
+        h('div', { class: 'acts' },
+          h('button', { class: 'linkish', onclick: function () { S.editingId = ev.id; S.form = eventToForm(ev); S.tab = 'log'; render(); window.scrollTo(0, 0); } }, 'Edit'),
+          confirming
+            ? h('button', { class: 'linkish', style: 'color:var(--stamp)', onclick: function () { evs.splice(i, 1); S.confirmDel = null; toast('Entry deleted'); render(); analyze(); } }, 'Confirm')
+            : h('button', { class: 'linkish', style: 'color:var(--muted)', onclick: function () { S.confirmDel = ev.id; render(); } }, 'Delete'))));
+    })(i);
+    add(sec, list);
+    nodes.push(sec);
+    return nodes;
+  }
+
+  // ------------------------------------------------------------- modal
+  var modalRoot = document.createElement('div');
+  document.body.appendChild(modalRoot);
+  function closeModal() { S.modal = null; renderModal(); }
+  function renderModal() {
+    modalRoot.innerHTML = '';
+    if (!S.modal) return;
+    var m = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' }, h('div', { class: 'grab' }));
+    var scrim = h('div', { class: 'scrim', onclick: function (e) { if (e.target === scrim) closeModal(); } }, m);
+    var g = S.game;
+    if (S.modal.kind === 'menu') {
+      add(m, h('h3', null, 'Case menu'),
+        h('button', { class: 'btn block', onclick: function () { S.game0 = S.game; S.setup = S.game.setup ? JSON.parse(JSON.stringify(S.game.setup)) : setupFromGame(S.game); S.game = null; S.modal = null; render(); } }, 'Edit setup (players, your cards)'),
+        h('button', { class: 'btn block', onclick: function () { S.modal = { kind: 'export' }; renderModal(); } }, 'Export / import game'),
+        h('button', { class: 'btn block', onclick: function () { S.modal = { kind: 'about' }; renderModal(); } }, 'How the solver works'),
+        S.modal.confirmNew
+          ? h('button', { class: 'btn block danger', onclick: function () { var keep = S.game.setup; S.game = null; S.setup = keep ? JSON.parse(JSON.stringify(keep)) : null; if (S.setup) { S.setup.myCards = []; S.setup.faceUp = []; } S.analysis = null; S.modal = null; S.form = null; render(); } }, 'Tap again to discard this game')
+          : h('button', { class: 'btn block danger', onclick: function () { S.modal.confirmNew = true; renderModal(); } }, 'New game'),
+        h('button', { class: 'btn block', onclick: closeModal }, 'Close'));
+    } else if (S.modal.kind === 'card') {
+      var A = S.analysis, c = S.modal.card, d = deck(g), N = A.N, ENV = A.ENV;
+      var owners = g.players.map(function (_, i) { return i; }).concat([ENV]);
+      var rel = (g.events || []).map(function (ev, i) { return { ev: ev, i: i }; }).filter(function (x) {
+        var ev = x.ev;
+        return (ev.cards && ev.cards.indexOf(c) >= 0) || ev.card === c;
+      });
+      add(m, h('h3', null, d.names[c]),
+        h('div', { class: 'bars' }, owners.map(function (o) {
+          var p = A.prob[o * N + c], k = A.known[o * N + c];
+          return h('div', { class: 'bar' + (k === E.NO ? ' out' : '') }, h('span', { class: 'lbl' }, o === ENV ? 'Envelope' : playerName(o)), h('span', { class: 'val' }, k === E.YES ? '✓ 100%' : k === E.NO ? '×' : pct(p)),
+            h('div', { class: 'track' }, h('div', { class: 'fill', style: 'background:' + (o === ENV ? 'var(--stamp)' : 'var(--felt)') + ';width:' + (p * 100).toFixed(1) + '%' })));
+        })),
+        rel.length ? h('div', { class: 'stack' }, h('span', { class: 'field-label' }, 'Entries mentioning it'),
+          h('div', { class: 'hist' }, rel.slice(-6).reverse().map(function (x) { return h('div', { class: 'ev' }, h('span', { class: 'n' }, '#' + (x.i + 1)), h('div', { class: 'body small' }, describe(x.ev))); }))) : null,
+        h('button', { class: 'btn block', onclick: function () { S.form = blankForm('fact'); S.form.card = c; S.tab = 'log'; S.modal = null; render(); } }, 'Note who has this card'),
+        h('button', { class: 'btn block', onclick: closeModal }, 'Close'));
+    } else if (S.modal.kind === 'export') {
+      var ta = h('textarea', { id: 'export-json', rows: 8, 'aria-label': 'Game data' }, JSON.stringify(S.game));
+      add(m, h('h3', null, 'Export / import'),
+        h('p', { class: 'small muted', style: 'margin:0' }, 'Copy this text to back up the game or move it to another device. To import, paste a saved game over it and tap Load.'),
+        ta,
+        h('div', { class: 'row', style: 'flex-wrap:nowrap' },
+          h('button', { class: 'btn block', onclick: function () {
+            var txt = ta.value;
+            try { navigator.clipboard.writeText(txt).then(function () { toast('Copied'); }, function () { ta.select(); toast('Select-all done — copy it manually'); }); }
+            catch (e) { ta.select(); toast('Select-all done — copy it manually'); }
+          } }, 'Copy'),
+          h('button', { class: 'btn primary block', onclick: function () {
+            try {
+              var gg = JSON.parse(ta.value);
+              var err = E.validateSetup(gg);
+              if (err) { toast(err); return; }
+              (gg.events || []).forEach(function (e) { if (!e.id) e.id = uid(); });
+              S.game = gg; S.modal = null; S.form = null; render(); analyze(); toast('Game loaded');
+            } catch (e) { toast('That isn’t a saved game.'); }
+          } }, 'Load')),
+        h('button', { class: 'btn block', onclick: closeModal }, 'Close'));
+    } else if (S.modal.kind === 'about') {
+      add(m, h('h3', null, 'How the solver works'), h('div', { class: 'prose small' },
+        h('p', null, 'Every logged entry is a hard fact about the deal: a player who passed holds none of the three cards; a player who showed holds at least one (exactly the one, if you saw it); a wrong accusation rules out that combination; hand sizes are fixed.'),
+        h('p', null, 'The solver counts every way the cards could have been dealt that fits all of those facts. Since the shuffle is random, each of those deals is equally likely. Each percentage is the share of fitting deals where that card is in that place, counted exactly with dynamic programming rather than estimated.'),
+        h('p', null, 'This catches deductions a paper notepad misses: hand-size squeezes, chains of “showed one of these three”, and cards that must be in the envelope because nobody has room for them.'),
+        h('p', null, 'Suggestions are ranked by expected information gain: for each possible suggestion it simulates who would show what across thousands of exact random deals, and measures how much the envelope odds would sharpen.'),
+        h('p', null, 'Assumptions: players never make mistakes when showing or passing, and when someone holds several of the cards, which one they show tells you nothing extra. Bluffs in suggestions are ignored. A mis-logged entry shows up as a conflict, flagged in History.')),
+        h('button', { class: 'btn block', onclick: closeModal }, 'Close'));
+    }
+    modalRoot.appendChild(scrim);
+  }
+  function setupFromGame(g) {
+    return {
+      edition: 'custom', cats: g.categories.map(function (c) { return { name: c.name, cards: c.cards.slice() }; }),
+      players: g.players.map(function (p) { return { name: p.name, hand: p.hand }; }), me: g.me,
+      faceUpMode: (g.faceUp || []).length > 0, myCards: g.myCards.slice(), faceUp: (g.faceUp || []).slice()
+    };
+  }
+
+  var toastRoot = document.createElement('div');
+  document.body.appendChild(toastRoot);
+  function renderToast() {
+    toastRoot.innerHTML = '';
+    if (S.toast) toastRoot.appendChild(h('div', { class: 'toast', role: 'status' }, S.toast));
+  }
+
+  // ------------------------------------------------------------- boot
+  restore();
+  render();
+  if (S.game) analyze();
+})();
+</script>
