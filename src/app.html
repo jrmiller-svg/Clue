@@ -607,7 +607,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-si
     add(main, h('section', { class: 'sheet' },
       h('h2', null, 'New case'),
       h('p', { class: 'small', style: 'margin:0' }, 'Set up the table once. Then log each suggestion as it happens. The solver counts every way the cards could have been dealt that fits what you have seen, so its odds are exact.'),
-      h('div', { class: 'row' }, h('button', { class: 'linkish', onclick: loadDemo }, 'Explore a demo game first →'))
+      h('div', { class: 'row between' }, h('button', { class: 'linkish', onclick: loadDemo }, 'Explore a demo game first →'), h('span', { class: 'tiny muted' }, 'Unofficial fan-made helper'))
     ));
 
     // edition
@@ -1243,6 +1243,7 @@ details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-si
         h('p', null, 'The solver counts every way the cards could have been dealt that fits all of those facts. Since the shuffle is random, each of those deals is equally likely. Each percentage is the share of fitting deals where that card is in that place, counted exactly with dynamic programming rather than estimated.'),
         h('p', null, 'This catches deductions a paper notepad misses: hand-size squeezes, chains of “showed one of these three”, and cards that must be in the envelope because nobody has room for them.'),
         h('p', null, 'Suggestions are ranked by expected information gain: for each possible suggestion it simulates who would show what across thousands of exact random deals, and measures how much the envelope odds would sharpen.'),
+        h('p', null, 'Unofficial, fan-made tool. Not affiliated with the makers of Clue or Cluedo.'),
         h('p', null, 'Assumptions: players never make mistakes when showing or passing, and when someone holds several of the cards, which one they show tells you nothing extra. Bluffs in suggestions are ignored. A mis-logged entry shows up as a conflict, flagged in History.')),
         h('button', { class: 'btn block', onclick: closeModal }, 'Close'));
     }
