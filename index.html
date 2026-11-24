@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <style>:root{padding-top:env(safe-area-inset-top,0px)}</style>
 <title>Clue Case Notes</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -52,6 +52,9 @@
 }
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
+html { touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body, button, a, input, select, textarea, label { touch-action: pan-x pan-y; }
+input[type="text"], select, textarea { font-size: 16px; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
   font: 15px/1.45 var(--font-body);
@@ -1335,6 +1338,10 @@ details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-si
 <script>
 (function () {
   'use strict';
+  // no zooming: block pinch (iOS gesture events) and double-tap; scrolling is unaffected
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (t) { document.addEventListener(t, function (e) { e.preventDefault(); }, { passive: false }); });
+  document.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
   var E = window.ClueEngine;
 
   // ------------------------------------------------------------ editions
