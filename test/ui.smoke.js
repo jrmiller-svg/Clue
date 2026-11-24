@@ -14,7 +14,8 @@ function serve() {
     const srv = http.createServer((req, res) => {
       const file = path.join(root, req.url === '/' ? 'index.html' : decodeURIComponent(req.url.split('?')[0]));
       if (!file.startsWith(root) || !fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
-      res.writeHead(200, { 'content-type': file.endsWith('.html') ? 'text/html' : 'text/plain' });
+      const types = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+      res.writeHead(200, { 'content-type': types[path.extname(file)] || 'text/plain' });
       fs.createReadStream(file).pipe(res);
     });
     srv.listen(0, () => resolve(srv));

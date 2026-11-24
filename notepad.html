@@ -170,6 +170,11 @@ table.grid { border-collapse: separate; border-spacing: 0; width: 100%; }
 details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
+<link rel="manifest" href="manifest-notepad.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/notepad-192.png">
+<link rel="apple-touch-icon" href="icons/notepad-180.png">
+<meta name="apple-mobile-web-app-title" content="Notepad">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 <body>
 <div id="app"></div>
@@ -624,6 +629,42 @@ details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-si
 
   restore();
   render();
+})();
+</script>
+<script>
+(function () {
+  function note(msg, ms) {
+    var d = document.createElement('div');
+    d.setAttribute('role', 'status');
+    d.textContent = msg;
+    d.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 72px);z-index:60;' +
+      'background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:10px;font-size:14px;line-height:1.35;max-width:calc(100% - 32px);text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.2);pointer-events:none';
+    document.body.appendChild(d);
+    setTimeout(function () { d.remove(); }, ms || 3500);
+  }
+  if (!('serviceWorker' in navigator) || !(location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) return;
+  window.addEventListener('load', function () {
+    var firstInstall = !navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('./sw.js', { scope: './' }).then(function (reg) {
+      var told = false;
+      function watch(w) {
+        if (!w || w.__watched) return;
+        w.__watched = true;
+        w.addEventListener('statechange', function () {
+          if (w.state === 'activated' && firstInstall && !told) { told = true; note('Saved on this device — it now works offline.'); }
+        });
+      }
+      watch(reg.installing);
+      reg.addEventListener('updatefound', function () { watch(reg.installing); });
+    }).catch(function () { /* offline support unavailable here */ });
+    try {
+      var ios = /iPhone|iPad|iPod/.test(navigator.userAgent), standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+      if (ios && !standalone && !localStorage.getItem('clue-install-hint')) {
+        localStorage.setItem('clue-install-hint', '1');
+        setTimeout(function () { note('Tip: tap Share, then “Add to Home Screen” to install this as an app that works offline.', 7000); }, 1200);
+      }
+    } catch (e) { /* storage blocked */ }
+  });
 })();
 </script>
 </body>

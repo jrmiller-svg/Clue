@@ -5,8 +5,9 @@
   "private": true,
   "scripts": {
     "build": "node tools/build.js",
+    "icons": "node tools/make-icons.js",
     "test": "node --test test/engine.test.js",
-    "test:ui": "node tools/build.js && node test/ui.smoke.js && node test/notepad.smoke.js"
+    "test:ui": "node tools/build.js && node test/ui.smoke.js && node test/notepad.smoke.js && node test/offline.smoke.js"
   },
   "license": "MIT"
 }

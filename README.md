@@ -12,6 +12,21 @@ A Clue / Cluedo solver built for your phone. You log turns as the game happens, 
 
 Each app is one self-contained HTML file (`index.html` is the solver). There's no server and no install, and it keeps working offline once loaded. Your game autosaves on the device.
 
+## Install on your iPhone (works offline)
+
+Both apps install as home-screen apps that work with no connection and no sign-in. They're hosted free on GitHub Pages from this repo.
+
+1. **Turn on GitHub Pages once.** In the repo, go to Settings → Pages → *Build and deployment*. Set Source to **Deploy from a branch**, Branch to **`claude/upbeat-goodall-1pxh4a`**, folder **`/ (root)`**, and tap Save. The site goes live a minute or two later.
+2. **Open the app in Safari** on your iPhone:
+   - Solver: https://jrmiller-svg.github.io/Clue/
+   - Plain notepad: https://jrmiller-svg.github.io/Clue/notepad.html
+3. Tap **Share → Add to Home Screen**. Do this for each app you want.
+4. **Open the new home-screen icon once while online.** When it says *"Saved on this device — it now works offline"*, it works in airplane mode.
+
+Notes:
+- The home-screen app keeps its own saved game, separate from Safari.
+- New versions download in the background when you're online and show up the next time you open the app.
+
 ## Using it during a game
 
 1. **Setup**: pick the edition (classic, 2016+ with Dr. Orchid, UK Cluedo, Master Detective, or your own card names), list the players clockwise in seating order, mark yourself, and tap your cards. Hand sizes fill in automatically; adjust them if some players got an extra card, or switch on the face-up-leftovers rule.
@@ -48,7 +63,7 @@ This app counts exactly instead:
 ## Verification
 
 - `npm test` runs the engine tests. The main check compares the exact solver with an independent **brute-force enumeration of every possible deal** on 275 random small games (2–6 players, face-up cards, accusations, noted cards). Deal counts, every probability, every certainty mark, and every triple probability must match. Other tests check that samples follow the exact posterior, that the MCMC fallback agrees with exact answers, that contradictions are pinned to the right entry, and that real deck sizes stay fast and keep the true deal possible.
-- `npm run test:ui` builds both pages and drives them in headless Chromium at iPhone size, in light and dark mode: setup, logging, all tabs, conflict detection and undo, reload persistence, and the demo game. For the notepad it checks that no percentages appear and that the turn log never marks the sheet.
+- `npm run test:ui` builds both pages and drives them in headless Chromium at iPhone size, in light and dark mode: setup, logging, all tabs, conflict detection and undo, reload persistence, and the demo game. For the notepad it checks that no percentages appear and that the turn log never marks the sheet. An offline test installs the service worker, cuts the network, and confirms both apps still load and work.
 
 ## Development
 
@@ -56,7 +71,9 @@ This app counts exactly instead:
 src/engine.js      solver (works in browser, Web Worker, and Node)
 src/app.html       solver UI (vanilla JS, no dependencies)
 src/notepad.html   plain notepad (no solver code at all)
-tools/build.js     inlines the engine → index.html; copies the notepad → notepad.html (+ dist/ artifact versions)
+src/sw.js          offline service worker template (saves both apps on the device)
+tools/build.js     builds index.html, notepad.html, manifests, sw.js (+ dist/ artifact versions)
+tools/make-icons.js renders the home-screen icons in icons/
 test/              engine tests (node:test) and UI smoke tests for both apps (Playwright)
 ```
 
