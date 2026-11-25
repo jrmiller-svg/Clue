@@ -7,7 +7,7 @@
  *   the background when online, so updates arrive on the next launch.
  */
 'use strict';
-var VERSION = '78d5191af057';
+var VERSION = '7f13bf4f932d';
 var CACHE = 'clue-app-' + VERSION;
 var FONT_CACHE = 'clue-fonts-v1';
 var ASSETS = ["./","./index.html","./notepad.html","./manifest-solver.webmanifest","./manifest-notepad.webmanifest","./icons/notepad-180.png","./icons/notepad-192.png","./icons/notepad-512.png","./icons/solver-180.png","./icons/solver-192.png","./icons/solver-512.png"];

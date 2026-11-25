@@ -314,9 +314,6 @@ details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-si
     var s = S.setup, P = s.players.length;
     var main = h('main', { class: 'no-tabs' });
     function rerender() { render(); }
-    add(main, h('section', { class: 'sheet' }, h('h2', null, 'New game'),
-      h('p', { class: 'small', style: 'margin:0' }, 'A digital version of the paper detective sheet. You make every mark yourself. It does no math and gives no hints.')));
-
     var sel = h('select', { id: 'edition', 'aria-label': 'Edition', onchange: function (e) {
       var v = e.target.value;
       if (v === 'custom') { s.edition = 'custom'; return; }
