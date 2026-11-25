@@ -76,6 +76,10 @@ main.no-tabs { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
 h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .between { justify-content: space-between; }
+/* sheet header stays one line so switching pens never shifts the grid */
+.sheet-head { flex-wrap: nowrap; }
+.sheet-head h2 { flex: none; }
+.pen-help { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .tiny { font-size: 12px; }
@@ -433,9 +437,9 @@ details summary { cursor: pointer; font-weight: 600; color: var(--felt); font-si
       });
     });
     table.appendChild(tb);
-    var penHelp = { x: '× — doesn’t have it', y: '✓ — has it', q: '? — maybe', t: '#' + S.tagNum + ' — tag (link cards from one turn)', e: 'eraser' }[S.pen];
+    var penHelp = { x: '× — doesn’t have it', y: '✓ — has it', q: '? — maybe', t: '#' + S.tagNum + ' — one turn’s cards', e: 'eraser' }[S.pen];
     return [h('section', { class: 'sheet' },
-      h('div', { class: 'row between' }, h('h2', null, 'Detective sheet'), h('span', { class: 'tiny muted' }, 'Pen: ' + penHelp)),
+      h('div', { class: 'row between sheet-head' }, h('h2', null, 'Detective sheet'), h('span', { class: 'tiny muted pen-help' }, 'Pen: ' + penHelp)),
       h('div', { class: 'grid-wrap' }, table),
       h('div', { class: 'legend' },
         h('span', null, 'Tap a box to mark it; tap again to clear.'),

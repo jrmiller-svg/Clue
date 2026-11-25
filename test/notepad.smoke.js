@@ -35,6 +35,14 @@ function assert(cond, msg) { if (!cond) throw new Error('ASSERT: ' + msg); }
     const body = await page.locator('main').innerText();
     assert(!/%/.test(body), 'notepad must not show percentages');
 
+    // switching pens never changes the header height (the grid must not jump)
+    const headH = () => page.locator('section.sheet', { hasText: 'Detective sheet' }).locator('.row').first().evaluate((e) => e.offsetHeight);
+    const h0 = await headH();
+    for (const pen of ['Tick: has it', 'Question mark: maybe', /^Number tag/, 'Eraser', 'Cross: does not have it']) {
+      await page.getByRole('button', { name: pen }).click();
+      assert(await headH() === h0, 'sheet header height changed with pen ' + pen);
+    }
+
     // default pen × ; tap twice toggles off
     await cell('Hall', 'Ava').click();
     assert(await cell('Hall', 'Ava').innerText() === '×', 'cross mark');
